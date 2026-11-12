@@ -1,0 +1,14 @@
+{
+  "name": "kail-nearauth-bundle",
+  "private": true,
+  "description": "Builds public/vendor/nearauth.js: NEAR Auth (login with Google, Apple, email) packed into one browser file. Kept apart from the game's own packages because NEAR Auth brings an older near-api-js.",
+  "scripts": {
+    "build": "esbuild entry.mjs --bundle --format=esm --platform=browser --inject:./shim.js --alias:util=../util.js --define:global=globalThis --define:process.env.NODE_ENV='\"production\"' --minify --legal-comments=none --outfile=../../public/vendor/nearauth.js"
+  },
+  "dependencies": {
+    "@fast-auth-near/browser-sdk": "1.4.2",
+    "@fast-auth-near/javascript-provider": "1.4.1",
+    "buffer": "6.0.3",
+    "esbuild": "0.25.10"
+  }
+}
