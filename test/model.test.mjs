@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { newChain, questOf, priceFor, sha256, NEAR } from '../src/model.js';
 import { playWeek } from '../src/week.js';
+import { worth } from '../src/npc-rules.js';
 
 let checks = 0;
 const ok = (name, f) => { f(); checks += 1; };
@@ -19,7 +20,7 @@ ok('the price of a coin is the contract\'s', () => {
   assert.equal(priceFor(NEAR * 22000n), NEAR);                        // prize / (500 tickets x 44 coins)
 });
 
-const game = () => { const c = newChain({ seed: 3 }); for (const who of ['a', 'b', 'c']) c.fund(who, 10n * NEAR); c.fund('makers', 100n * NEAR); c.now -= c.dayMs; c.call('makers', 'add_prize', 100n * NEAR); c.now += c.dayMs; return c; };
+const game = () => { const c = newChain({ seed: 3, fees: false }); for (const who of ['a', 'b', 'c']) c.fund(who, 10n * NEAR); c.fund('makers', 100n * NEAR); c.now -= c.dayMs; c.call('makers', 'add_prize', 100n * NEAR); c.now += c.dayMs; return c; };
 ok('a top-up buys whole coins at the day\'s price and fills the vault', () => {
   const c = game(), price = c.coinPrice(), before = c.wallet('a');
   assert.equal(c.call('a', 'top_up', price * 7n + 5n), 7);
@@ -95,6 +96,19 @@ ok('the ticket market: NEAR for a ticket, 5% to the vault', () => {
   assert.deepEqual(c.audit(), []);
 });
 
+ok('every call costs its sender the network\'s fee, and the books still close', () => {
+  const c = newChain({ seed: 3 });
+  c.fund('a', NEAR); c.fund('server', NEAR);
+  const before = c.wallet('a'), price = c.coinPrice();
+  c.call('a', 'top_up', price * 10n);
+  assert.equal(before - c.wallet('a'), price * 10n + 4n * NEAR / 10000n);     // 4.0 Tgas at 0.0001 NEAR a Tgas
+  c.call('a', 'buy_bait', 1); c.call('a', 'cast'); c.call('a', 'land', 'anchovy');
+  assert.equal(c.money().fees, (40n + 29n + 28n) * NEAR / 100000n);         // the player paid for three calls
+  assert.equal(c.money().serverFees, 28n * NEAR / 100000n);                  // the server for landing the catch
+  refused(() => c.call('nobody', 'cast'), /Not enough NEAR/);                // no NEAR, no transaction
+  assert.deepEqual(c.audit(), []);
+});
+
 const hash = (w) => createHash('sha256').update(JSON.stringify(w)).digest('hex');
 const week = playWeek({ days: 7, seed: 1 });
 ok('a week played fast: the books close every day', () => assert.deepEqual(week.problems, []));
@@ -105,4 +119,19 @@ ok('the boats do what the game is about', () => {
   assert.ok(sum((d) => d.winners) >= 1, 'somebody wins'); assert.ok(sum((d) => d.fishSold) >= 10, 'fish are traded');
   assert.equal(sum((d) => d.refused), 0, 'the rules never ask for a step the contract would refuse');
 });
+ok('all the NEAR of a week is accounted for, fees and all', () => {
+  const m = week.money, add = (list) => Math.round(list.reduce((a, [, v]) => a + v, 0) * 1e6) / 1e6;
+  assert.equal(m.total, m.totalNow); assert.equal(add(m.cameIn), m.total); assert.equal(add(m.isNow), m.totalNow);
+  assert.ok(m.isNow.find(([k]) => /fees by the players/.test(k))[1] > 0.1, 'the players paid fees'); assert.ok(m.isNow.find(([k]) => /fees by the makers/.test(k))[1] > 0.05, 'the server paid fees'); assert.equal(m.cameIn[2][1], m.isNow[6][1]);
+});
+ok('a week with other settings: more players, more joining every day, a bigger vault', () => {
+  const big = playWeek({ days: 4, seed: 5, vault: 30, players: 23, joining: 4, wallet: 5 });
+  assert.deepEqual(big.problems, []); assert.deepEqual(big.days.map((d) => d.players), [23, 27, 31, 35]); assert.equal(big.boats.length, 35);
+  assert.equal(big.days[0].bankStart, 30); assert.equal(big.days[0].prize, 6);      // a fifth of the vault is the first day's prize
+  assert.equal(big.money.total, big.money.totalNow); assert.equal(big.money.cameIn[0][1], 35 * 5);
+  assert.equal(big.days.reduce((a, d) => a + d.refused, 0), 0);
+  const none = playWeek({ days: 2, seed: 5, vault: 0, players: 2 });
+  assert.deepEqual(none.problems, []); assert.equal(none.days[0].paidOut, 0, 'an empty vault pays nothing on the first day');
+});
+ok('every fish a fisher can have on board has a worth', () => { for (const id of ['sailfish', 'anchovy', 'shark', 'crown']) assert.ok(Number.isInteger(worth(id)) && worth(id) >= 2, id); });
 console.log(`the model against the contract: ${checks} checks passed`);

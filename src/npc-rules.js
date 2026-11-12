@@ -50,7 +50,10 @@ const COINS_KEPT = 20;                       // coins kept for bait when an upgr
 
 // Bait a fisher expects to spend to bring up one of a kind: the throws measured with the game's robots, times
 // the price of bait. This is what a fish is "worth" to somebody who could also go and catch it.
-export const worth = (id) => Math.max(BAIT_PRICE, Math.round(QUEST.effort[id] * BAIT_PRICE));
+// (a fish no quest asks for, the sailfish, has no measured effort: it counts like the other fish of the deep.
+// Without this its worth was not a number, and a fisher with one on board named a price the contract refuses.)
+const DEEP_EFFORT = 3;
+export const worth = (id) => Math.max(BAIT_PRICE, Math.round((QUEST.effort[id] ?? DEEP_EFFORT) * BAIT_PRICE));
 const withFee = (price, n = 1) => price * n + Math.max(1, Math.ceil(price * n * FEE));
 const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const NAMES = { anchovy: 'anchovy', mackerel: 'mackerel', clownfish: 'clownfish', snapper: 'snapper', milkfish: 'milkfish', grouper: 'grouper', barracuda: 'barracuda', tuna: 'tuna', shark: 'shark', sailfish: 'sailfish', pearl: 'pearl', goldbar: 'gold bar', crown: 'old crown' };
@@ -171,8 +174,9 @@ export function decide(who, me, S, memo) {
   for (const m of missing) {
     const limit = worth(m.id) * who.pays;
     const sale = others.filter((o) => !o.buying && o.token_id === m.id).sort((a, b) => Number(a.price) - Number(b.price))[0];
-    if (sale && withFee(Number(sale.price)) <= limit * 1.05 && coins >= withFee(Number(sale.price))) {
-      const n = Math.min(m.missing, sale.amount, Math.floor(coins / withFee(Number(sale.price))));
+    const room = p.storage_cap - p.held;      // never more than there is room for: the contract refuses the whole purchase otherwise
+    if (sale && room > 0 && withFee(Number(sale.price)) <= limit * 1.05 && coins >= withFee(Number(sale.price))) {
+      const n = Math.min(m.missing, sale.amount, room, Math.floor(coins / withFee(Number(sale.price))));
       return { step: 'buy_item', order: sale.id, amount: n, why: `Needs ${m.missing} more ${name(m.id)}. One is for sale at ${sale.price} coins; fishing one costs about ${worth(m.id)} coins of bait, so buying is ${Number(sale.price) < worth(m.id) ? 'cheaper' : 'worth the time'}.` };
     }
   }
@@ -194,8 +198,11 @@ export function decide(who, me, S, memo) {
     const want = Math.min(MOST_BAIT, Math.max(2, Math.ceil(m.missing * QUEST.effort[m.id]))), can = Math.min(want, Math.floor(coins / BAIT_PRICE));
     if (can >= 1) return { step: 'buy_bait', amount: can, why: `No bait left. ${m.missing} ${name(m.id)} to go takes about ${want} throws: buys ${can} bait for ${can * BAIT_PRICE} coins.` };
     if (memo.topUps >= TOP_UPS_A_DAY) return { step: 'rest', why: `Out of coins, and has topped up ${TOP_UPS_A_DAY} times today already. That is the budget.` };
-    if (memo.near < KEEP_NEAR + TOP_UP_NEAR) return { step: 'rest', why: `Out of coins and the wallet is down to ${memo.near.toFixed(2)} NEAR: stays ashore.` };
-    return { step: 'top_up', near: TOP_UP_NEAR, why: `Out of coins. Tops up ${TOP_UP_NEAR} NEAR from the wallet (${memo.near.toFixed(2)} NEAR): about ${Math.floor((TOP_UP_NEAR * 1e24) / Number(S.coin_price))} coins at today's price.` };
+    // one top-up is TOP_UP_NEAR. Where a coin is dear (a big prize makes it so) that would not pay for the bait
+    // wanted, or not even for one coin, which the contract refuses: then one top-up is what that bait costs.
+    const forBait = Number((BigInt(S.coin_price) * BigInt(want * BAIT_PRICE)) / 10n ** 18n) / 1e6, near = Math.max(TOP_UP_NEAR, forBait);
+    if (memo.near < KEEP_NEAR + near) return { step: 'rest', why: near > TOP_UP_NEAR ? `Out of coins. Bait for the quest would cost ${near} NEAR at today's coin price, and the wallet holds ${memo.near.toFixed(2)} NEAR: stays ashore.` : `Out of coins and the wallet is down to ${memo.near.toFixed(2)} NEAR: stays ashore.` };
+    return { step: 'top_up', near, why: `Out of coins. Tops up ${near} NEAR from the wallet (${memo.near.toFixed(2)} NEAR): about ${Math.floor((near * 1e24) / Number(S.coin_price))} coins at today's price.` };
   }
   if (chest && memo.chests >= MOST_CHESTS) {
     const fish = missing.find((x) => !CHEST_FINDS.includes(x.id));

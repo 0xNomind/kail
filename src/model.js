@@ -4,8 +4,10 @@
 // This is a MODEL of contract/src, not the contract. It keeps the same books by the same rules: what a coin costs,
 // what the quest asks for, how the two markets hold and hand over, how a day's prize is set aside and drawn, who is
 // owed what. Each function below carries the name of the contract call it stands for and refuses what the contract
-// refuses, in the contract's words. What is left out: NEAR's fees for transactions, and the cast's secret (who may
-// land a catch is the server's business; here the runner is trusted as the server is there).
+// refuses, in the contract's words. Every call also costs its caller the network's fee, as measured on testnet
+// (FEES below). What is left out: the cast's secret (who may land a catch is the server's business; here the
+// runner is trusted as the server is there), and that a call the contract refuses still costs a little gas on
+// the chain (here it costs nothing).
 // What the chain draws from its own randomness (what is in a chest, who wins) is drawn here from a seeded row of
 // numbers, so the same seed always plays the same week.
 //
@@ -23,6 +25,18 @@ const BAIT_PRICE = 2, WELCOME_BAIT = 5, CHEST_EVERY_MS = 20_000;
 const STORAGE_CAP = [16, 24, 36, 50, 70], STORAGE_COST = [30, 70, 150, 300], REEL_COST = [40, 90, 200, 400];
 const FEE_PERCENT = 5, ITEM_ORDERS_EACH = 5, ITEMS_PER_ORDER = 10, MIN_ITEM_PRICE = 2, TICKET_ORDERS_EACH = 10, TICKETS_PER_ORDER = 1000;
 export const MAX_WINNERS = 100, DRAW_CAP = 500, PLAYER_CAP = 10, ONE_IN = 5;
+// What a call costs its sender on NEAR: the gas it burned on testnet (Tgas, read from the transactions of the
+// computer's boats and of the game's server on 2026-11-13) at the network's gas price, 0.0001 NEAR for a Tgas.
+// (Real fees came out up to 5% under this, because part of a call is charged at a slightly lower price.)
+// The three marked "like" were not seen on the chain yet and take the number of the call most like them.
+export const FEES = { cast: 2.8, buy_bait: 2.9, throw_back: 2.6, upgrade: 2.9, hand_in: 4.7, top_up: 4.0, list_item: 2.7, want_item: 3.0, cancel_item_order: 3.5, buy_item: 5.5, sell_item: 4.7,
+  enter_draw: 3.2, claim: 3.2, sell_tickets: 2.9, buy_tickets: 4.1, add_prize: 3.0,
+  bid_tickets: 3.0 /* like want_item */, fill_bid: 4.1 /* like buy_tickets */, cancel_order: 3.5 /* like cancel_item_order */,
+  // these three are sent, and paid for, by the game's server, not by the player
+  land: 2.8, settle_draw: 4.6, welcome: 3.0 /* like bid_tickets */ };
+const BY_SERVER = new Set(['land', 'settle_draw', 'welcome']);
+export const SERVER = 'server';
+const networkFee = (method) => BigInt(Math.round((FEES[method] || 3) * 10)) * 10n ** 19n;
 const feeOf = (total) => Math.ceil((total * FEE_PERCENT) / 100), feeOfNear = (total) => (total * BigInt(FEE_PERCENT) + 99n) / 100n;
 
 // ---- SHA-256, because a day's quest is worked out from the hash of its number (contract/src/quest.rs)
@@ -66,7 +80,7 @@ export function priceFor(prize, coinsPerTicket = 44) {
   return up > LOWEST_COIN_PRICE ? up : LOWEST_COIN_PRICE;
 }
 
-export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coinsPerTicket = 44, startMs = null } = {}) {
+export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coinsPerTicket = 44, startMs = null, fees = true } = {}) {
   const rnd = mulberry32(seed), refuse = (words) => { throw new Error(words); }, need = (ok, words) => { if (!ok) refuse(words); };
   // every change is written down so that a call the contract would refuse half-way leaves nothing behind
   let undo = null;
@@ -74,7 +88,7 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
   const put = (obj, field, value) => { const old = obj[field]; undo?.push(() => { obj[field] = old; }); obj[field] = value; };
   const c = {
     now: startMs ?? dayMs * 1000, dayMs, prizePercent, coinsPerTicket,
-    vault: 0n, escrow: 0n, funded: 0n, lastDay: null, coinPrice: null, nextId: 1,
+    vault: 0n, escrow: 0n, funded: 0n, fees: 0n, serverFees: 0n, lastDay: null, coinPrice: null, nextId: 1,
     wallets: new Map(), balances: new Map(), profiles: new Map(), owed: new Map(), toppedUp: new Map(), welcomed: new Map(),
     draws: new Map(), entered: new Map(), questGiven: new Map(), recent: [],
     orders: new Map(), ordersOf: new Map(), ticketOrders: new Map(), ticketOrdersOf: new Map(), ticketTrades: [], itemTrades: [],
@@ -341,8 +355,8 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
     const wrong = [];
     const inWallets = [...c.wallets.values()].reduce((a, x) => a + x, 0n), owedAll = [...c.owed.values()].reduce((a, x) => a + x, 0n);
     const setAside = [...c.draws.values()].filter((d) => !d.settled).reduce((a, d) => a + d.pool, 0n);
-    const near = inWallets + c.vault + setAside + owedAll + c.escrow;
-    if (near !== c.funded) wrong.push(`NEAR: ${c.funded} was put into wallets, ${near} is there now (wallets ${inWallets}, vault ${c.vault}, prizes set aside ${setAside}, owed ${owedAll}, held for offers ${c.escrow})`);
+    const near = inWallets + c.vault + setAside + owedAll + c.escrow + c.fees + c.serverFees;
+    if (near !== c.funded) wrong.push(`NEAR: ${c.funded} was put into wallets, ${near} is accounted for now (wallets ${inWallets}, vault ${c.vault}, prizes set aside ${setAside}, owed ${owedAll}, held for offers ${c.escrow}, fees ${c.fees + c.serverFees})`);
     const offers = [...c.ticketOrders.values()].filter((o) => o.buying).reduce((a, o) => a + o.price * BigInt(o.amount), 0n);
     if (offers !== c.escrow) wrong.push(`NEAR held for ticket offers: ${c.escrow}, the offers add up to ${offers}`);
     const held = new Map();
@@ -370,9 +384,19 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
     call(who, method, ...args) {
       const f = calls[method] || refuse(`No such call: ${method}`);
       undo = [];
-      try { const out = f(who, ...args); undo = null; return out; }
+      try {
+        // the network's fee first, from whoever sends the transaction: the player, or the game's server
+        if (fees) { const fee = networkFee(method), payer = BY_SERVER.has(method) ? SERVER : who; pay(payer, fee); put(c, BY_SERVER.has(method) ? 'serverFees' : 'fees', (BY_SERVER.has(method) ? c.serverFees : c.fees) + fee); }
+        const out = f(who, ...args); undo = null; return out;
+      }
       catch (e) { for (const back of undo.reverse()) back(); undo = null; throw e; }
     },
     player, state, draw: drawView, coinPrice: coinPriceNow, audit,
+    /// Where all the NEAR is, in yoctoNEAR: what came in from outside, and every place it can be now.
+    money() {
+      const sum = (it) => [...it].reduce((a, x) => a + x, 0n);
+      return { cameIn: c.funded, wallets: sum(c.wallets.values()), owed: sum(c.owed.values()), offers: c.escrow, vault: c.vault,
+        setAside: sum([...c.draws.values()].filter((d) => !d.settled).map((d) => d.pool)), fees: c.fees, serverFees: c.serverFees };
+    },
   };
 }

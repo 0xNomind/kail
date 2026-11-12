@@ -172,8 +172,8 @@ async function land(request, env) {
   let landed;
   try { landed = await call(c, 'land', { player: account, cast: String(cast), what: got.caught.what, secret, sea: mark }); }
   catch (e) { return json({ error: reason(e) }, 409); }
-  // the kind that went into storage, or null when the storage was full
-  return json({ landed, what: got.caught.what,
+  // the kind that went into storage, or null when the storage was full; and the transaction that put it there
+  return json({ landed, what: got.caught.what, tx: lastHash,
     ticket: await ticket(env, { v: 1, a: account, c: Number(cast), r: mark, t0: says.t0, n: says.n + ticks, reel: got.reel, top: got.reel, back: got.back, sea: writeSea(got.world) }) });
 }
 

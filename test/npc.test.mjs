@@ -30,6 +30,8 @@ function check(what, got, want) {
 }
 
 check('everything on board: hand in', decide(darto, ME, game({ items: { anchovy: 4, tuna: 3, pearl: 1 } }), memo()), { step: 'hand_in' });
+check('no more is bought than there is room for', decide(sari, ME, game({ items: { tuna: 3, pearl: 1 }, held: 14, orders: [order(7, 'p.testnet', false, 'anchovy', 4, 4)] }), memo()), { step: 'buy_item', order: '7', amount: 2 });
+check('a sailfish on board (no quest asks for one) is offered at a price that is a number', decide(darto, ME, game({ items: { sailfish: 2 } }), memo()), { step: 'list_item', token_id: 'sailfish', amount: 2, price: Math.ceil(6 * darto.asks) });
 check('a cheap fish for sale is bought', decide(sari, ME, game({ items: { tuna: 3, pearl: 1 }, orders: [order(7, 'p.testnet', false, 'anchovy', 3, 4)] }), memo()), { step: 'buy_item', order: '7', amount: 3 });
 check('a dear fish for sale is not bought: the thrifty one fishes', decide(darto, ME, game({ items: { tuna: 3, pearl: 1 }, orders: [order(7, 'p.testnet', false, 'anchovy', 3, 9)] }), memo()), { step: 'fish', want: 'anchovy' });
 check('its own listing is not bought', decide(sari, ME, game({ items: { tuna: 3, pearl: 1 }, coins: 0, bait: 5, orders: [order(7, ME, false, 'anchovy', 3, 2)] }), memo()), { step: 'fish', want: 'anchovy' });
@@ -38,6 +40,11 @@ check('and with the request up, goes fishing', decide(sari, ME, game({ items: { 
 check('no bait: buys some', decide(darto, ME, game({ bait: 0, coins: 30 }), memo()), { step: 'buy_bait', amount: 9 });
 check('no bait and few coins: buys what the coins allow', decide(darto, ME, game({ bait: 0, coins: 5 }), memo()), { step: 'buy_bait', amount: 2 });
 check('no bait, no coins: tops up', decide(darto, ME, game({ bait: 0, coins: 1 }), memo()), { step: 'top_up', near: 0.02 });
+{ // a big prize makes a coin dear: the usual top-up would not buy a coin, so a top-up is what the bait costs
+  const dear = { ...game({ bait: 0, coins: 1 }), coin_price: (NEAR * 9n / 100n).toString() };      // 0.09 NEAR a coin; the quest wants 9 throws first: 18 coins
+  check('a dear coin: tops up what the bait costs', decide(darto, ME, dear, memo({ near: 9 })), { step: 'top_up', near: 1.62 });
+  check('a dear coin and a small wallet: stays ashore', decide(darto, ME, dear, memo({ near: 2 })), { step: 'rest' });
+}
 check('the day\'s top-ups are used up: rests', decide(darto, ME, game({ bait: 0, coins: 1 }), memo({ topUps: 3 })), { step: 'rest' });
 check('the wallet is low: rests', decide(darto, ME, game({ bait: 0, coins: 1 }), memo({ near: 0.4 })), { step: 'rest' });
 check('NEAR waiting on the contract is collected first', decide(darto, ME, game({ owed: '5000000000000000000000' }), memo()), { step: 'claim' });
@@ -100,12 +107,12 @@ for (let i = 0; i < 20000; i++) {
     sell_tickets: () => d.amount >= 1 && d.amount <= +p.tickets && BigInt(d.price) >= 10n ** 20n,
     cancel: () => o && o.account === ME,
     sell_item: () => o && o.buying && o.account !== ME && d.amount >= 1 && d.amount <= o.amount && has(o.token_id) >= d.amount,
-    buy_item: () => o && !o.buying && o.account !== ME && d.amount >= 1 && d.amount <= o.amount && coins >= Number(o.price) * d.amount,
+    buy_item: () => o && !o.buying && o.account !== ME && d.amount >= 1 && d.amount <= o.amount && coins >= Number(o.price) * d.amount && p.held + d.amount <= p.storage_cap,
     list_item: () => has(d.token_id) >= d.amount && d.amount >= 1 && d.amount <= 10 && d.price >= 2 && S.orders.filter((x) => x.account === ME).length < 5,
     want_item: () => d.amount >= 1 && d.amount <= 10 && d.price >= 2 && coins >= d.price * d.amount && S.orders.filter((x) => x.account === ME).length < 5,
     throw_back: () => has(d.token_id) >= 1,
     buy_bait: () => d.amount >= 1 && coins >= d.amount * 2,
-    top_up: () => m.topUps < 3 && m.near >= 0.5 + d.near,
+    top_up: () => m.topUps < 3 && m.near >= 0.5 + d.near && BigInt(Math.round(d.near * 1e6)) * 10n ** 18n >= BigInt(S.coin_price) * 2n,      // it pays for one bait at least
     fish: () => +p.bait >= 1 && p.held < p.storage_cap && typeof d.want === 'string',
     claim: () => BigInt(p.owed) > 0n,
     fill_bid: () => t && t.buying && t.account !== ME && d.amount >= 1 && d.amount <= t.amount && d.amount <= +p.tickets,

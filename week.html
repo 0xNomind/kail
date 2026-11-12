@@ -29,22 +29,28 @@
 
   <main id="main" class="wide">
     <h1>A week in a minute</h1>
-    <p class="lead">Ten boats the computer plays go through seven days of Kail, here in your browser: the rules they play by on NEAR, the real sea, and a model of the contract's rules. Nothing is sent anywhere, and nothing here is on the chain.</p>
+    <p class="lead">Players the computer plays go through seven days of Kail, here in your browser. You set how much NEAR the prize vault starts with and how many players there are; the rules, the fees and the sea are the game's own. Nothing is sent anywhere, and nothing here is on the chain.</p>
 
     <!-- Everything below is on the page from the start, with its room set aside, and is filled in as the week
          goes: nothing appears, grows or moves while it plays. -->
     <section class="panel player" aria-labelledby="h-run">
       <h2 id="h-run" class="visually-hidden">The week</h2>
+      <div class="settings">
+        <label>NEAR in the prize vault at the start <input id="vault" type="number" inputmode="decimal" min="0" max="10000" step="any" value="4"></label>
+        <label>Players on day 1 <input id="players" type="number" inputmode="numeric" min="1" max="100" step="1" value="10"></label>
+        <label>New players on every later day <input id="joining" type="number" inputmode="numeric" min="0" max="20" step="1" value="0"></label>
+        <label>Luck no. <input id="seed" type="number" inputmode="numeric" min="1" max="999999" step="1" value="1" aria-describedby="luck"></label>
+      </div>
+      <p class="note" id="luck">Luck: the game has chance in it (which fish swim by, what a chest holds, who wins the draw). The luck number is like a numbered set of dice: number 1 always rolls the same way, so the same settings with the same number give exactly the same week, and anybody can check the numbers. “Play with other luck” takes other dice: the same game and settings, a different week. What stays the same with every luck is the game; what changes was luck. Every player comes with 10 NEAR, what the testnet faucet gives.</p>
       <div class="controls">
         <button class="btn primary" type="button" id="start">Play the week</button>
         <button class="btn" type="button" id="skip" disabled>Skip to the end</button>
-        <label>Which week <input id="seed" inputmode="numeric" value="1" title="Every number is its own week, and the same number always plays the same week."></label>
-        <label>New fishers on day 3 <select id="more"><option value="0">none</option><option value="10">10 more</option><option value="30">30 more</option></select></label>
+        <button class="btn" type="button" id="reroll">Play with other luck</button>
       </div>
       <ol class="daysbar" id="bar" aria-label="The seven days"></ol>
       <div class="nowbox" role="status" aria-live="polite">
         <p class="nowline" id="now">Press “Play the week”. Each day takes about eight seconds.</p>
-        <p class="whyline" id="why">While it plays, this line shows what one boat after another decides, in the boat's own words.</p>
+        <p class="whyline" id="why">While it plays, this line shows what one player after another decides, in the player's own words.</p>
       </div>
     </section>
 
@@ -53,30 +59,60 @@
     <section class="panel" aria-labelledby="h-charts">
       <h2 id="h-charts">How it moved</h2>
       <div class="sparks" id="sparks"></div>
+      <p class="note">Coins are bought with NEAR and pay for bait: one bait is 2 coins, and a quest takes about 44 coins of bait. The contract sets the price of a coin anew every day, from that day's prize: the bigger the prize, the dearer a coin, so that a ticket costs about what it is worth. The NEAR paid for coins goes into the prize vault.</p>
     </section>
 
     <div class="weekgrid">
       <section class="panel flat" aria-labelledby="h-days">
         <h2 id="h-days">Day by day</h2>
         <div class="scrollx" tabindex="0"><table class="tbl" id="days"></table></div>
-        <p class="note">Prize: what a full draw could pay that day, a fifth of the prize money when the day began; a winning ticket gets a hundredth of it. Earned: tickets from quests. Fish: how many changed hands.</p>
+        <p class="note">Prize: what a full draw could pay that day, a fifth of the prize money when the day began; a winning ticket gets a hundredth of it. Earned: tickets from quests. Fish: how many changed hands. Fees: NEAR paid to NEAR's network that day, by the players and by the game's server.</p>
       </section>
       <section class="panel flat" aria-labelledby="h-boats">
-        <h2 id="h-boats">The boats</h2>
+        <h2 id="h-boats">The players, by character</h2>
         <div class="scrollx" tabindex="0"><table class="tbl" id="boats"></table></div>
-        <p class="note">NEAR: what a boat has more or less than it started with, counting what it is owed.</p>
+        <p class="note">Every player is one of ten characters, each with its own way of playing. NEAR each: what a player of that character has more or less than the 10 NEAR it came with, on average, counting what it is owed.</p>
       </section>
     </div>
 
+    <section class="panel flat" aria-labelledby="h-near">
+      <h2 id="h-near">Where all the NEAR is</h2>
+      <div class="scrollx" tabindex="0"><table class="tbl neartbl" id="near"></table></div>
+      <p class="note">Counted to the last yoctoNEAR after every day, and shown here to a millionth of a NEAR. The two totals are always the same number: NEAR only moves, by a rule of the contract or as a fee to the network.</p>
+    </section>
+
     <section class="panel" aria-labelledby="h-said">
-      <h2 id="h-said">What the boats decided, and why</h2>
-      <ul class="saidlist" id="saidList" tabindex="0"><li class="empty">The boats' decisions are listed here as the week goes, newest first.</li></ul>
+      <h2 id="h-said">What the players decided, and why</h2>
+      <ul class="saidlist" id="saidList" tabindex="0"><li class="empty">The players' decisions are listed here as the week goes, newest first.</li></ul>
     </section>
 
     <section class="panel" aria-labelledby="h-books">
       <h2 id="h-books">The books</h2>
       <p id="books">After every day everything is added up: NEAR, coins, tickets, fish. A tick under a day means nothing appeared or vanished without a rule for it.</p>
-      <p class="note">The same week from the command line: <code>npm run simulate</code>. The model is <code>src/model.js</code>, the boats' rules are <code>src/npc-rules.js</code>, and <code>npm run verify</code> checks the model against the contract on NEAR.</p>
+      <p class="note">The same week from the command line: <code>npm run simulate</code>. The model is <code>src/model.js</code>, the players' rules are <code>src/npc-rules.js</code>, and <code>npm run verify</code> checks the model against the contract on NEAR.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-real">
+      <h2 id="h-real">What is real here, and what is not</h2>
+      <div class="realgrid">
+        <div>
+          <h3>The same as in the game on NEAR</h3>
+          <ul>
+            <li>Every rule of the contract: prices, the quest, the vault, the draw, both markets. What the contract refuses is refused here.</li>
+            <li>The network's fee for every step, as measured on testnet: a cast 0.00028 NEAR, handing in a quest 0.00047, a top-up 0.0004, buying a fish 0.00055. The server pays for writing down a catch (0.00028) and for holding a draw (0.00046).</li>
+            <li>The sea and the hook: the game's own code, in the same steps of 1/240 of a second.</li>
+            <li>How the computer's players think, and how long they pause between one step and the next.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Not the same</h3>
+          <ul>
+            <li>The players are ten computer characters, repeated. People would play differently.</li>
+            <li>Chance comes from the luck number, not from the chain.</li>
+            <li>Fees are counted at the network's usual price; on NEAR a step can cost a few per cent less.</li>
+          </ul>
+        </div>
+      </div>
     </section>
   </main>
   <script type="module" src="src/weekpage.js"></script>

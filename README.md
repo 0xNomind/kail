@@ -29,15 +29,19 @@ and ends with a line like `9 held, 0 did not, 5 skipped`. The five skipped ones 
 `npm run verify -- --server <address>` checks those too, against the hosted game or against
 `http://localhost:3000` on a machine that has the server's key. `--json` gives the same as JSON.
 
-`npm run simulate` plays seven days of the game at once: the ten boats, with the rules they play by on the
-chain, fishing in the real sea, against a model of the contract's rules written in JavaScript (`src/model.js`).
-It prints each day's prize, coin price, tickets earned and drawn, winners, what fish traded for, where every
-boat ended, and a few of the boats' decisions with their reasons. The same seed always plays the same week
-(it prints a fingerprint), and after every day it adds up its books: if NEAR, coins, tickets or fish appeared or
-vanished without a rule for it, it says where and exits with 1. `--days`, `--seed`, `--newcomers 3:10` and
-`--json` change it. It is a model, not the chain: `npm run verify` checks that the model gives the contract's
-quest and the contract's coin price for today, and `test/model.test.mjs` holds it against the contract's rules.
-The same week can be watched in the browser at `/week`.
+`npm run simulate` plays seven days of the game at once: players the computer plays, with the rules they play
+by on the chain, fishing in the real sea in its real steps, against a model of the contract's rules written in
+JavaScript (`src/model.js`). The model also charges the network's fee for every call, at the gas each call
+burned on testnet. It prints each day's prize, coin price, tickets earned and drawn, winners, fees, what fish
+traded for, where every player ended, where all the NEAR is, and a few of the players' decisions with their
+reasons. The settings: `--vault 4` (NEAR in the prize vault before the first day), `--players 10` (players on
+day 1), `--join 0` (more players on every later day), `--wallet 10` (NEAR each comes with), `--seed 1` (the luck
+number: which chance the week gets), `--days 7`, `--json`. The same settings always play the same week (it
+prints a fingerprint), and after every day it adds up its books: if NEAR, coins, tickets or fish appeared or
+vanished without a rule for it, it says where and exits with 1. It is a model, not the chain: the players are
+ten computer characters repeated, and chance comes from the luck number. `npm run verify` checks that the model
+gives the contract's quest and the contract's coin price for today, and `test/model.test.mjs` holds it against
+the contract's rules. The same week can be watched in the browser at `/week`, with the same settings.
 
 Where each claim lives, and how to check it:
 
@@ -104,7 +108,7 @@ Steps a judge can follow:
 | Open **Board → Quest**, hand in the three things asked for | A ticket |
 | Open **Harbour** | Top up coins with NEAR, put tickets into today's draw, see earlier draws with the transaction that held each, collect NEAR you won |
 | Open **Tickets** | The ticket market, for NEAR: buy one sale, or several of the cheapest at once in one transaction |
-| Open `/week` and press **Start** | Seven days of the economy in about a minute: the boats' decisions with their reasons, each day's prize, coin price, tickets and winners, and where every boat ends |
+| Open `/week`, set the vault and the players, press **Play the week** | Seven days of the economy in about a minute: the players' decisions with their reasons, each day's prize, coin price, tickets, winners and fees, and a table of where all the NEAR is |
 
 On testnet a "day" is one hour, so a quest and a draw come round every hour. The pages say so.
 
