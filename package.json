@@ -1,0 +1,36 @@
+{
+  "name": "kail",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs",
+    "boats": "node server/boats.mjs",
+    "serve": "node serve.mjs",
+    "test": "node test/sim.test.mjs && node test/replay.mjs && node test/npc.test.mjs",
+    "test:contract": "cd contract && cargo test --lib",
+    "build": "node scripts/build-site.mjs",
+    "worker": "npm run build && wrangler dev -c server/wrangler.toml",
+    "deploy": "npm run build && wrangler deploy -c server/wrangler.toml",
+    "secrets": "node scripts/cloudflare-secrets.mjs",
+    "vendor": "esbuild vendor-src/near.mjs --bundle --format=esm --platform=browser --alias:util=./vendor-src/util.js --minify --legal-comments=none --outfile=public/vendor/near.js",
+    "vendor:auth": "cd vendor-src/nearauth && npm install && npm run build",
+    "art": "node art/build.mjs && node art/icon.mjs",
+    "npcs": "node scripts/npc-accounts.mjs",
+    "welcome": "node scripts/welcome-account.mjs"
+  },
+  "dependencies": {
+    "@hot-labs/near-connect": "0.12.0",
+    "function-call-key-plugin": "2.2.0",
+    "near-api-js": "7.5.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "wrangler": "^4.161.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "description": "A fishing game whose economy runs on a NEAR contract: fish and tickets are NEP-245 tokens, catches are replayed and checked by a server, and computer-played boats trade with their own accounts.",
+  "author": "0xNomind"
+}

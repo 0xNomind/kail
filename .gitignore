@@ -1,0 +1,11 @@
+node_modules/
+art/out/
+.DS_Store
+server/.dev.vars
+contract/target/
+test/replay-log*.mjs
+server/npc-accounts.json
+dist/
+.wrangler/
+server/.wrangler/
+server/.public-key
