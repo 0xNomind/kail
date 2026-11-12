@@ -1,0 +1,83 @@
+{
+ "anchors": {
+  "boat": {
+   "rodTip": {
+    "x": 2,
+    "y": 4
+   },
+   "waterline": 40
+  }
+ },
+ "fish": [
+  {
+   "id": "anchovy",
+   "label": "ANCHOVY",
+   "tier": 1,
+   "w": 19,
+   "h": 12
+  },
+  {
+   "id": "mackerel",
+   "label": "MACKEREL",
+   "tier": 1,
+   "w": 24,
+   "h": 15
+  },
+  {
+   "id": "clownfish",
+   "label": "CLOWNFISH",
+   "tier": 1,
+   "w": 20,
+   "h": 18
+  },
+  {
+   "id": "snapper",
+   "label": "SNAPPER",
+   "tier": 2,
+   "w": 33,
+   "h": 23
+  },
+  {
+   "id": "milkfish",
+   "label": "MILKFISH",
+   "tier": 2,
+   "w": 37,
+   "h": 20
+  },
+  {
+   "id": "grouper",
+   "label": "GROUPER",
+   "tier": 2,
+   "w": 32,
+   "h": 23
+  },
+  {
+   "id": "barracuda",
+   "label": "BARRACUDA",
+   "tier": 3,
+   "w": 50,
+   "h": 21
+  },
+  {
+   "id": "tuna",
+   "label": "TUNA",
+   "tier": 3,
+   "w": 53,
+   "h": 34
+  },
+  {
+   "id": "shark",
+   "label": "SHARK",
+   "tier": 3,
+   "w": 62,
+   "h": 33
+  },
+  {
+   "id": "sailfish",
+   "label": "SAILFISH",
+   "tier": 4,
+   "w": 78,
+   "h": 39
+  }
+ ]
+}
