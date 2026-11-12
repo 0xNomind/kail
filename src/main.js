@@ -4,7 +4,7 @@
 // contract: a cast spends a bait there. What swims in the sea is decided by the game's server; the game writes
 // down what the player's hands do, and to land a catch it hands those moves in. The server plays them again
 // in the same sea, sees for itself what came up, and has the contract put it in storage (src/replay.js).
-import { W, ITEM_BY_ID, JUNK } from './config.js';
+import { W, ITEM_BY_ID, JUNK, RARE } from './config.js';
 import { newWorld, newPlayer, step, cast, release } from './sim.js';
 import { TICK, REST_TICKS, makeRecorder, roundX } from './replay.js';
 import { loadArt, makeRenderer, BANDS } from './render.js';
@@ -18,8 +18,15 @@ for (const el of document.querySelectorAll(FAUCET ? '[data-mainnet]' : '[data-te
 music(document.getElementById('musicChip'));
 const stage = document.getElementById('stage'), canvas = document.getElementById('sea');
 const me = account();
-if (!me) location.replace('./');      // the game is played with a NEAR account: sign in on the front page
-document.getElementById('who').textContent = me ? shortName(me, 18) : '';
+// With nobody signed in this is a practice sea: the same sea, hook and pull, played here only. Nothing goes to the
+// chain or to the game's server, nothing is kept, and what needs an account (the shop, the market, the quest's
+// tickets) says so. It is there so that anybody can see how the game plays before they sign in.
+const practice = !me;
+const trial = { coins: '0', bait: '10', tickets: '0', items: [], held: 0, storage_cap: 16, reel: 0, storage: 0, casts: '0', open_cast: null, owed: '0', entered_today: 0 };
+document.getElementById('who').textContent = me ? shortName(me, 18) : 'Sign in';
+// (the practice sea has no coins and no tickets: their places in the top row say "Practice · Sign in" instead)
+document.getElementById('practiceNote').classList.toggle('hidden', !practice);
+for (const id of ['coinChip', 'ticketChip']) document.getElementById(id).classList.toggle('hidden', practice);
 
 // Portrait first: the sea is always 180 game pixels wide; the height follows the screen.
 let view = { h: 320, scale: 2, sky: 0 }, renderer = null, desk = false, ui = null;
@@ -70,13 +77,15 @@ const post = (path, data) => fetch(path, { method: 'POST', headers: { 'content-t
 // ---- the player's sea
 // The server decides what swims in it: it gives a number to grow the sea from, and a signed ticket for it.
 async function askSea() {
+  if (practice) return { seed: Math.floor(Math.random() * 2 ** 32), ticket: null, reel: 0 };
   for (;;) {
-    try { const r = await post('api/sea', { account: me }); const a = await r.json(); if (r.ok && a.ticket) return a; } catch { /* asked again below */ }
-    say('Could not reach the game server. Trying again…');
+    let none = false;
+    try { const r = await post('api/sea', { account: me }); const a = await r.json(); if (r.ok && a.ticket) return a; none = r.status === 503; } catch { /* asked again below */ }
+    say(none ? 'This copy of the game has no game server of its own (no server key). Start it with KAIL_SERVER=<the hosted address> npm start, or sign out to use the practice sea.' : 'Could not reach the game server. Trying again…');
     await wait(3000);
   }
 }
-const seaAsked = me ? askSea() : new Promise(() => {});
+const seaAsked = askSea();
 const art = await loadArt();
 const firstSea = await seaAsked;
 const world = newWorld(firstSea.seed);
@@ -92,6 +101,7 @@ let stale = false, landings = 0, keeping = null;
 // (the state comes with the first hundred market orders; a fuller market is read to its end)
 async function loadAll() {
   const s = await load(me);
+  if (practice) { s.me = trial; s.events ||= []; }      // the chain's quest and market, and a player that lives here
   if (s.orders.length >= 100) { try { s.orders = await allOrders('item_orders', s.orders); } catch { /* the first hundred will do */ } }
   return s;
 }
@@ -117,6 +127,7 @@ mirror();
 // this game having been open. Lines the player has not been told about yet are shown as messages; all of them
 // are in the History tab.
 function announce() {
+  if (practice) return;
   const fresh = news(me, S.events);
   for (const e of fresh.slice(0, 3).reverse()) {
     const { text, pic } = describe(e);
@@ -144,6 +155,7 @@ const game = {
   // A read right after a write can still show the old state, so the state is read once more a little later.
   // `doing` is shown while the call is on its way, so a press is never met with silence.
   async act(call, done, doing = 'Sending to NEAR…') {
+    if (practice) { ui.toast('This is a practice sea. Sign in (front page) to buy, trade and earn tickets for real.', '', 4500); return; }
     if (game.busy || firstSteps()) return;
     game.busy = true; ui.refresh();
     const stop = ui.working(doing);
@@ -220,7 +232,8 @@ new MutationObserver(() => document.getElementById('askShade').classList.toggle(
     yes.textContent = 'Approve once';
     document.getElementById('keyAskHow').textContent = "That key can only do the game's own actions on the game's contract. It can never send NEAR: topping up and buying tickets still ask you in NEAR Auth's window.";
   }
-  nearFirst().then(welcome).then(() => gameKeyWorks(me)).then((ok) => { if (!ok) box.classList.remove('hidden'); ui.refresh(); });
+  if (practice) ui.toast('Practice sea: nothing here is saved or on the chain. Press CAST to try.', 'good', 7000);
+  else nearFirst().then(welcome).then(() => gameKeyWorks(me)).then((ok) => { if (!ok) box.classList.remove('hidden'); ui.refresh(); });
   const said = (text) => { tell.textContent = text; tell.hidden = !text; };
   yes.addEventListener('click', async () => {
     yes.disabled = true; said(signedInWithAuth() ? "Waiting for NEAR Auth's window…" : 'Waiting for your wallet…');
@@ -267,7 +280,8 @@ function tryCast() {
   // landing it needs that secret, so only this game can have this cast landed.
   const secret = crypto.getRandomValues(new Uint8Array(16));
   casting += 1;
-  const number = lastLanding.then(async () => String(await send('cast', { seal: b64(new Uint8Array(await crypto.subtle.digest('SHA-256', secret))) })));
+  const number = practice ? Promise.resolve(practiceCast())
+    : lastLanding.then(async () => String(await send('cast', { seal: b64(new Uint8Array(await crypto.subtle.digest('SHA-256', secret))) })));
   // a throw the chain never saw is in this sea all the same: the sea is out of step and has to be started anew
   number.then(() => {}, (e) => { stale = true; ui.toast(`The cast did not reach the chain: ${reason(e)}`, 'bad'); if (outOfNear(e)) nearFirst(); }).finally(() => { casting -= 1; setTimeout(game.refresh, 800); });
   throwNow = { secret: b64(secret), number };
@@ -284,9 +298,25 @@ function drop() { if (release(world)) moves.did(tick, 'r'); }
 
 // Hand in the moves up to this catch. The server plays them again and answers with what went into storage (for
 // a chest: what was inside), or with nothing when the storage was full; and with a ticket for the sea as it is now.
-async function land(thrown, endTick) {
+// In the practice sea a throw costs one of ten bait that fill up again by themselves, and a catch goes into a
+// storage that only this page knows (a chest holds one of its three finds, each as likely as the others).
+function practiceCast() {
+  trial.bait = String(+trial.bait - 1); trial.casts = String(+trial.casts + 1);
+  if (+trial.bait < 1) { trial.bait = '10'; ui.toast('Practice bait is free: ten more.', '', 3000); }
+  return trial.casts;
+}
+function practiceLand(ev) {
+  const kind = ev.chest ? RARE[Math.floor(Math.random() * RARE.length)].id : ev.id, had = trial.items.reduce((a, [, n]) => a + +n, 0);
+  if (had >= trial.storage_cap) return null;
+  const row = trial.items.find(([id]) => id === kind);
+  if (row) row[1] = String(+row[1] + 1); else trial.items.push([kind, '1']);
+  trial.held = had + 1;
+  return kind;
+}
+async function land(thrown, endTick, ev) {
   landings += 1;
   try {
+    if (practice) { await wait(300); return practiceLand(ev); }
     const castNumber = await thrown.number;
     if (keeping) await keeping;
     for (let tries = 0; tries < 6; tries++) {
@@ -305,7 +335,7 @@ async function land(thrown, endTick) {
 // player has been throwing (and missing), after two and a half minutes when the sea was only watched.
 const KEEP_BUSY = 45 * 240, KEEP_QUIET = 150 * 240;
 function keepSea() {
-  if (keeping || stale || landings || casting || world.hook.state !== 'idle') return;
+  if (practice || keeping || stale || landings || casting || world.hook.state !== 'idle') return;
   const played = tick - base.tick;
   if (played < KEEP_BUSY || (played < KEEP_QUIET && moves.since(base.tick) < 2)) return;
   const end = tick;
@@ -366,7 +396,7 @@ function handle(ev) {
       landing[ev.id] = (landing[ev.id] || 0) + 1;
       ui.toast(`${ui.pic(ev.id, 22, 12)} ${name}!`, 'good');
     }
-    lastLanding = land(thrown, tick).then((kind) => {
+    lastLanding = land(thrown, tick, ev).then((kind) => {
       if (ev.chest) ui.toast(kind ? `${ui.pic(kind, 22, 12)} Chest: ${ITEM_BY_ID[kind].name}!` : 'Storage was full: the chest find is lost.', kind ? 'good' : 'bad');
       else if (!kind) ui.toast(`Storage was full: the ${name.toLowerCase()} is lost.`, 'bad');
     }, (e) => ui.toast(`The ${ev.chest ? 'chest' : name.toLowerCase()} is lost: ${reason(e)}`, 'bad')).finally(() => {

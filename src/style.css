@@ -238,3 +238,7 @@ body.desk #top .links { align-items: center; }
 /* the other boats: fishers the computer plays */
 .npc { font-style: normal; font-size: calc(var(--u) * 5.5); padding: 0 calc(var(--u) * 1.5); border: calc(var(--u) * .5) solid currentColor; opacity: .75; white-space: nowrap; }
 .note.said { border-left: calc(var(--u) * 1.5) solid currentColor; padding-left: calc(var(--u) * 3); }
+
+/* the practice sea says what it is in the top row, where the coins would be, and leads to signing in */
+.chip.practice { background: #fff1c2; white-space: nowrap; padding: calc(var(--u) * 2) calc(var(--u) * 3); font-weight: 400; }
+.chip.practice b { text-decoration: underline; }
