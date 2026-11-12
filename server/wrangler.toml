@@ -1,0 +1,35 @@
+# The game on Cloudflare: one Worker for the pages and the server (server/worker.mjs).
+#   npm run build     copies the pages into dist/
+#   npm run deploy    builds, then publishes (after "npx wrangler login")
+# The keys are secrets, never written here: see README.md, "Hosting on Cloudflare".
+name = "kail"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+# no usage reports to Cloudflare from this project
+send_metrics = false
+
+# The pages. /play shows play.html, as on a developer's machine. /api goes to the Worker, never to a file.
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+run_worker_first = ["/api/*"]
+
+# The names (not secret). For mainnet: change these, src/network.js, and deploy.
+[vars]
+NEAR_NETWORK = "testnet"
+NEAR_CONTRACT = "kail-game.testnet"
+NEAR_ACCOUNT = "kail-game.testnet"
+WELCOME = "kail-welcome.testnet"
+# The computer's boats: which accounts they are (their keys stay where the boats run, see README.md)
+NPCS = "kail-old-tom.testnet=Old Tom,kail-maggie.testnet=Maggie,kail-finn.testnet=Finn,kail-captain-hale.testnet=Captain Hale,kail-nora.testnet=Nora,kail-ruby.testnet=Ruby,kail-silas.testnet=Silas,kail-wren.testnet=Wren,kail-jack.testnet=Jack,kail-dolly.testnet=Dolly"
+
+# Where the boats' news is kept (who they are, what each is doing and why), told by server/boats.mjs.
+[[kv_namespaces]]
+binding = "BOATS"
+
+# Once a minute: hold the draw of a day that is over.
+[triggers]
+crons = ["* * * * *"]
