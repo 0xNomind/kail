@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/png" sizes="192x192" href="public/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="public/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#22496e">
+  <title>Kail: fishing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <aside id="dockLeft" class="dock" aria-label="Quest and storage"></aside>
+  <div id="stage">
+    <canvas id="sea" aria-label="The sea. Press CAST to throw the hook; drag here to steer it."></canvas>
+
+    <div id="top" class="hud">
+      <a class="brand" href="./"><img class="px" data-icon="hook" data-k="1.6" alt="">Kail</a>
+      <div class="chips">
+      <div class="chip" title="Coins"><img class="px" data-icon="icon_coin" alt=""><b id="coins">0</b></div>
+      <div class="chip" title="Bait"><img class="px" data-icon="icon_bait" alt=""><b id="bait">0</b></div>
+      <button class="chip" id="storeChip" title="Storage"><img class="px" data-icon="icon_storage" alt=""><b id="store">0/10</b></button>
+      <a class="chip" id="ticketChip" href="harbour#draw" title="Tickets: use them at the Harbour"><img class="px" data-icon="icon_ticket" alt=""><b id="tickets">0</b></a>
+      <button class="chip music" id="musicChip" type="button" aria-label="Music"><b>♪</b></button>
+      <div class="chip right" id="depthChip"><b id="depth">0 m</b></div>
+      </div>
+      <nav class="links" aria-label="Other pages"><a href="harbour">Harbour</a><a href="tickets">Tickets</a><a href="./" id="who" class="who" title="Who is playing. Sign in or out on the front page.">Guest</a></nav>
+    </div>
+
+    <div id="toasts" aria-live="polite"></div>
+
+    <div id="bottom" class="hud">
+      <div class="side">
+        <button id="btnShop" class="btn square" aria-label="Shop: bait and reel"><img class="px" data-icon="icon_bait" alt=""><span>Shop</span></button>
+        <button id="btnStorage" class="btn square" aria-label="Storage: what you caught"><img class="px" data-icon="icon_storage" alt=""><span>Storage</span><i id="storageDot" class="dot hidden"></i></button>
+      </div>
+      <div id="castWrap">
+        <button id="btnCast" class="btn big">CAST</button>
+      </div>
+      <button id="btnMarket" class="btn square" aria-label="Board: the daily quest and the market"><img class="px" data-icon="icon_hold" alt=""><span>Board</span><i id="boardDot" class="dot hidden"></i></button>
+    </div>
+
+    <div id="dive">
+      <div id="pull" class="hidden" aria-live="off">
+        <div class="grip"><span>GRIP</span><div class="bar2"><i id="gripFill"></i></div></div>
+        <div class="track"><div id="pullBox"></div><div id="pullIcon"></div></div>
+        <b id="pullLabel">Keep it in the box</b>
+      </div>
+      <button id="btnRelease" class="btn drop hidden" aria-label="Drop what is on the hook"></button>
+    </div>
+
+    <div id="panel" class="sheet hidden" role="dialog" aria-modal="false"></div>
+    <div id="askShade" class="shade hidden" aria-hidden="true"></div>
+    <div id="keyAsk" class="sheet ask hidden" role="dialog" aria-labelledby="keyAskTitle">
+      <header><h2 id="keyAskTitle">One approval, then no more wallet windows</h2></header>
+      <div class="body">
+        <p class="note">Casting, buying bait and trading fish are small actions on NEAR. Let the game sign them itself, with a key kept in this browser.</p>
+        <p class="note" id="keyAskHow">That key can only do the game's own actions on the game's contract. It can never send NEAR: topping up and buying tickets still ask your wallet.</p>
+        <p class="note">The approval names a limit of 0.25 NEAR. That is the most the key may ever spend on fees, a little with every action (about 0.0003 NEAR). Nothing is taken now, and your account does not have to hold that much.</p>
+        <p class="note said" id="keyAskSay" role="status" aria-live="polite" hidden></p>
+        <button class="btn row go wide" id="keyAskYes" type="button">Approve once in my wallet</button>
+        <a class="btn row wide" href="./" style="margin-top:calc(var(--u) * 3)">Back to the front page</a>
+      </div>
+    </div>
+    <div id="nearAsk" class="sheet ask hidden" role="dialog" aria-labelledby="nearAskTitle">
+      <header><h2 id="nearAskTitle">First, get some NEAR</h2></header>
+      <div class="body">
+        <p class="note">Every cast and every trade is written on NEAR, and each costs a tiny fee (about 0.0003 NEAR) that your own account pays. Yours holds <b id="nearAskHas">0</b> NEAR and needs at least <b id="nearAskNeeds">0.02</b> to play.</p>
+        <p class="note" data-testnet>On the test network NEAR is free. Three steps:</p>
+        <p class="note" data-mainnet>Send a little NEAR to your account from a wallet or an exchange:</p>
+        <ol class="steps">
+          <li>Copy your account's name: <code id="nearAskId"></code></li>
+          <li data-testnet>Open the NEAR faucet, paste the name there and ask for NEAR.</li>
+          <li data-mainnet>In your wallet or exchange, send NEAR to that name.</li>
+          <li>Come back here. The game sees your NEAR by itself, and your 5 free bait are handed over.</li>
+        </ol>
+        <p class="note said" id="nearAskSay" role="status" aria-live="polite">Waiting for your NEAR…</p>
+        <button class="btn row wide" id="nearAskCopy" type="button">Copy my account's name</button>
+        <a class="btn row go wide" id="nearAskOpen" data-testnet href="https://near-faucet.io/" target="_blank" rel="noopener" style="margin-top:calc(var(--u) * 3)">Open the NEAR faucet</a>
+        <a class="btn row wide" href="./" style="margin-top:calc(var(--u) * 3)">Back to the front page</a>
+      </div>
+    </div>
+    <div id="loading">Loading…</div>
+  </div>
+  <aside id="dockRight" class="dock" aria-label="Shop and market"></aside>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

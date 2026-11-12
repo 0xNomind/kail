@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/png" sizes="192x192" href="public/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="public/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#fbe3b4">
+  <meta name="description" content="Kail is a cozy pixel fishing game. One quest a day pays tickets, and tickets go into a daily prize draw.">
+  <title>Kail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="./"><img class="px" data-icon="hook" data-k="2" alt="">Kail</a>
+      <nav aria-label="Main">
+        <a href="harbour">Harbour</a>
+        <a href="tickets">Tickets</a>
+        <a class="btn primary small" href="play">Play now</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <h1>Fish the deep.<br>Fill the quest.</h1>
+          <p class="lead">A cozy pixel fishing game. One quest a day pays tickets, and tickets go into a daily prize draw.</p>
+          <div class="start" id="signedOut">
+            <div class="row"><button class="btn primary" type="button" id="signin">Sign in to play</button></div>
+            <p class="help">With NEAR Auth (Google, Apple or email, no wallet needed) or with a NEAR wallet.</p>
+          </div>
+          <div class="start" id="signedIn" hidden>
+            <p class="signed">Signed in as <b id="acct"></b><span class="tag" id="acctHow">testnet</span></p>
+            <div class="row"><a class="btn primary" href="play">Play now</a><button class="btn" type="button" id="signout">Sign out</button></div>
+            <p class="help">Your coins, catch and tickets are on NEAR, under this account.</p>
+          </div>
+          <p class="also"><a class="btn small" href="harbour">Open the Harbour</a></p>
+        </div>
+        <div class="sea-frame"><canvas id="sea" aria-label="The sea of the game, live: a boat, a swinging hook and fish swimming past"></canvas></div>
+      </div>
+    </section>
+
+    <section class="day">
+      <div class="wrap">
+        <h2>A day on the water</h2>
+        <ol class="flow">
+          <li><span class="dot"><img class="px" data-icon="icon_bait" data-k="3" alt=""></span><div><b>Buy bait</b><span>One bait for every throw of the hook.</span></div></li>
+          <li><span class="dot"><img class="px" data-icon="hook" data-k="3" alt=""></span><div><b>Cast and steer</b><span>Guide the hook down past whatever swims in the way.</span></div></li>
+          <li><span class="dot"><img class="px" data-icon="fish_tuna_1" data-k="1" alt=""></span><div><b>Hold on</b><span>Keep the catch inside the box until it reaches the boat.</span></div></li>
+          <li><span class="dot"><img class="px" data-icon="chest" data-k="2" alt=""></span><div><b>Bring three kinds</b><span>The quest wants an upper fish, a deep fish and a chest find.</span></div></li>
+          <li><span class="dot"><img class="px" data-icon="icon_ticket" data-k="3" alt=""></span><div><b>Get a ticket</b><span>Only so many a day for everybody. First come, first served.</span></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="two">
+      <div class="wrap">
+        <h2>Coins stay in the game. NEAR stays at the Harbour.</h2>
+        <div class="cols">
+          <div class="place">
+            <h3><img class="px" data-icon="icon_coin" data-k="3" alt="">In the game, with coins</h3>
+            <ul>
+              <li><span class="ic"><img class="px" data-icon="icon_bait" data-k="2" alt=""></span>Bait, a faster reel, more storage</li>
+              <li><span class="ic"><img class="px" data-icon="fish_snapper_1" data-k="1" alt=""></span>Buy and sell fish with other players</li>
+              <li><span class="ic"><img class="px" data-icon="item_pearl" data-k="2" alt=""></span>Put a find up at your own price</li>
+              <li><span class="ic"><img class="px" data-icon="icon_hold" data-k="2" alt=""></span>Hand the catch to the daily quest</li>
+            </ul>
+          </div>
+          <div class="place near">
+            <h3><img class="px" data-icon="icon_ticket" data-k="3" alt="">At the Harbour, with NEAR</h3>
+            <ul>
+              <li><span class="ic"><img class="px" data-icon="icon_coin" data-k="2" alt=""></span>Top up coins</li>
+              <li><span class="ic"><img class="px" data-icon="icon_ticket" data-k="2" alt=""></span>Buy and sell tickets</li>
+              <li><span class="ic"><img class="px" data-icon="item_crown" data-k="2" alt=""></span>Burn tickets to enter the daily draw</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="today">
+      <div class="wrap">
+        <h2>Today's quest</h2>
+        <div class="grid">
+          <div class="needs" id="needs" aria-live="polite"></div>
+          <div>
+            <div class="figures">
+              <div><span>Tickets in today's draw</span><b id="left">...</b></div>
+              <div><span>New quest in</span><b id="clock">...</b></div>
+              <div><span>Today's prize</span><b id="prize">...</b></div>
+              <div><span>In the vault</span><b id="each">...</b></div>
+            </div>
+            <p class="demo">Live numbers from the game's contract on NEAR<span data-testnet> testnet. Testnet NEAR is free and worth nothing</span>. <span id="dayNote"></span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Kail, built at NEAR Hackathon. The game's economy runs on a contract on NEAR<span data-testnet> testnet</span>.</span>
+      <span><a href="play">Play now</a> · <a href="harbour">Open the Harbour</a></span>
+    </div>
+  </footer>
+  <script type="module" src="src/landing.js"></script>
+</body>
+</html>
