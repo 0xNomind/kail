@@ -10,6 +10,40 @@ A fishing game in the browser whose economy runs on a NEAR contract. Built at NE
 - Ten boats are played by the computer. Each is an ordinary NEAR account with its own NEAR, coins and fish, and
   plays by the same contract calls as a person.
 
+## Check it in a few minutes (no wallet, no keys, no sign-in)
+
+For a reviewer, human or program. Node 20 or newer.
+
+```bash
+npm install       # no build step follows
+npm run verify    # reads NEAR testnet and checks this README's claims, one line each
+npm test          # the sea, the replay check, the boats' rules (about a minute)
+npm start         # the pages, at http://localhost:3000
+```
+
+`npm run verify` changes nothing and needs no account. It prints each claim with what it found on the chain
+(the contract and its NEP-245 methods, the draw's limits, the coin price worked out from the prize, earlier draws
+with the transaction that held each, the ten boats with their balances and casts, their orders on the markets)
+and ends with a line like `9 held, 0 did not, 5 skipped`. The five skipped ones are about a running game server:
+`npm run verify -- --server <address>` checks those too, against the hosted game or against
+`http://localhost:3000` on a machine that has the server's key. `--json` gives the same as JSON.
+
+Where each claim lives, and how to check it:
+
+| Claim | Code | Check |
+| --- | --- | --- |
+| A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
+| Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
+| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (58 tests) |
+| The computer's boats are accounts that play by readable rules | `server/npc-rules.mjs`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
+| Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
+| Sign-in with Google, Apple or email | `src/nearauth.js`, `server/relay.mjs` | by hand, at `http://localhost:3000` (see "Signing in") |
+
+What cannot be checked without a signed-in player: the game itself (casting and pulling), a top-up, entering a
+draw. Those are the steps under "Try it". A local `npm start` without the server's key shows the pages with live
+contract data, but cannot land a catch; `KAIL_SERVER=<the hosted address> npm start` uses the hosted server
+instead. `npm run test:contract` needs Rust and compiles for several minutes the first time.
+
 ## The problem it deals with
 
 A game that pays out real tokens has three weak spots, and this project is an attempt at each:

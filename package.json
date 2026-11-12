@@ -8,6 +8,7 @@
     "serve": "node serve.mjs",
     "test": "node test/sim.test.mjs && node test/replay.mjs && node test/npc.test.mjs",
     "test:contract": "cd contract && cargo test --lib",
+    "verify": "node scripts/verify.mjs",
     "build": "node scripts/build-site.mjs",
     "worker": "npm run build && wrangler dev -c server/wrangler.toml",
     "deploy": "npm run build && wrangler deploy -c server/wrangler.toml",
