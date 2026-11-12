@@ -2,7 +2,7 @@
 // node test/economy.mjs
 import { BAIT, MONEY, QUEST, UPGRADES, ITEM_BY_ID, DRAW } from '../src/config.js';
 import { newWorld, newPlayer, step, release, entities, storageUsed, storageCap, buyBait, buyUpgrade, upgradeCost } from '../src/sim.js';
-import { questsFor, giveToQuest, stillNeeds, stockLeft, doneCount, sellToPlayers, playerBid, winChance } from '../src/quests.js';
+import { questsFor, giveToQuest, stillNeeds, stockLeft, doneCount, sellToPlayers, playerBid, winChance } from './model/quests.js';
 import { makeBot } from './bot.mjs';
 
 const DT = 1 / 60;

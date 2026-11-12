@@ -13,7 +13,7 @@
 //!
 //! Coins and bait cannot be sent from one account to another. Coins only ever appear through a top-up.
 //!
-//! What a coin costs follows the day's prize: never less than 0.01 NEAR, and more on a day with a big prize,
+//! What a coin costs follows the day's prize: never less than 0.00001 NEAR, and more on a day with a big prize,
 //! so that making a ticket never costs less than a ticket is worth. Both are set when the day begins.
 use near_sdk::json_types::{U64, U128};
 use near_sdk::store::{IterableMap, LookupMap};

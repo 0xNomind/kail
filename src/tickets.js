@@ -167,6 +167,8 @@ function draw(page) {
     <div class="sidehead"><span>Wanted</span><span>tickets</span></div>${B.map((l) => bar(l, 'bid')).join('') || '<p class="empty">no offers</p>'}`;
 
   // ---- the form
+  // (the price starts at what tickets go for right now: the lowest sale, else the last sale, else the lowest allowed)
+  if (!$('price').value && document.activeElement !== $('price')) $('price').value = near(asks[0]?.price || S.ticketTrades[0]?.price || '100000000000000000000');
   for (const b of document.querySelectorAll('.switch [data-way]')) b.setAttribute('aria-selected', String(b.dataset.way === way));
   $('quick').innerHTML = [way === 'sell' ? ['Lowest price', asks[0]?.price] : ['Best offer', bids[0]?.price], ['Last sold', S.ticketTrades[0]?.price]].filter(([, p]) => p)
     .map(([label, p]) => `<button class="btn small" type="button" data-price="${near(p)}">${label}: ${near(p)}</button>`).join('');

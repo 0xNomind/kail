@@ -17,8 +17,8 @@ For a reviewer, human or program. Node 20 or newer.
 ```bash
 npm install       # no build step follows
 npm run verify    # reads NEAR testnet and checks this README's claims, one line each
-npm test          # the sea, the replay check, the boats' rules (about a minute)
-npm start         # the pages, at http://localhost:3000
+npm test          # the sea, the replay check, the boats' rules (a few seconds)
+npm start         # the pages, at http://localhost:3000; /play is a practice sea when nobody is signed in
 ```
 
 `npm run verify` changes nothing and needs no account. It prints each claim with what it found on the chain
@@ -39,8 +39,10 @@ Where each claim lives, and how to check it:
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
 | Sign-in with Google, Apple or email | `src/nearauth.js`, `server/relay.mjs` | by hand, at `http://localhost:3000` (see "Signing in") |
 
-What cannot be checked without a signed-in player: the game itself (casting and pulling), a top-up, entering a
-draw. Those are the steps under "Try it". A local `npm start` without the server's key shows the pages with live
+The game itself can be seen and played without signing in: `http://localhost:3000/play` is then a practice sea
+(the same sea, hook and pull, played in the browser only; nothing is saved or sent). What cannot be checked
+without a signed-in player is what touches the chain: a real cast, a top-up, entering a draw. Those are the steps
+under "Try it". A local `npm start` without the server's key shows the pages with live
 contract data, but cannot land a catch; `KAIL_SERVER=<the hosted address> npm start` uses the hosted server
 instead. `npm run test:contract` needs Rust and compiles for several minutes the first time.
 
@@ -55,7 +57,9 @@ A game that pays out real tokens has three weak spots, and this project is an at
 2. **A prize that depends on new money.** A day's prize is a fixed share (20%) of the vault as it stood when the
    day began, at most 500 tickets enter a day (10 per account), one ticket in five wins, and a winning ticket gets
    a hundredth of the prize. A day with few tickets pays out less and the rest stays in the vault. The price of a
-   coin is worked out from the day's prize, so bait is never dearer than what it can win back on average.
+   coin is worked out from the day's prize: in a full draw, the bait a quick player spends to make a ticket
+   (44 coins, measured with the game's robots; an average player spends about 48, a slow one 68) costs what a
+   ticket wins on average. So the vault does not drain to good players, and it grows from everybody else.
 3. **A chain the player has to think about.** After one approval the game signs its own small actions (casting,
    buying bait, trading fish) with a key that can do nothing else, so playing opens no wallet. Signing in also
    works with Google, Apple or email (NEAR Auth), with no wallet at all.
@@ -80,6 +84,7 @@ Steps a judge can follow:
 | Do | See |
 | --- | --- |
 | Open the front page | Today's quest, the prize and the tickets in today's draw, read live from the contract `kail-game.testnet` |
+| Press **Play now** without signing in | The practice sea: press **CAST**, steer the hook onto a fish, hold to pull it up. Bait is free there and nothing is saved |
 | Press **Sign in**, choose **NEAR wallet** (Meteor on testnet) or **NEAR Auth** (Google, Apple, email) | You land in the game. A new account gets 5 bait once. With too little NEAR the game says so first, with your account's name and the testnet faucet |
 | Press **Approve once** | One approval adds the game's key. From here casting and trading open no window |
 | Press **CAST**, steer the hook onto a fish, hold to pull it up while keeping it in the box | The fish is in Storage after a few seconds. It is a token: look your account up on `https://testnet.nearblocks.io` |
@@ -96,8 +101,9 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
   [`contract/`](contract/README.md) (Rust, near-sdk). 58 unit tests and a test on a local chain.
 - Tokens: one NEP-245 contract holds every kind. Only tickets can be sent to another account; coins, bait and
   fish change hands through the market.
-- The draw uses the chain's randomness and is held by anybody's call once a day is over (the server does it every
-  minute). Every draw is kept with its winners and the transaction that held it.
+- The draw uses the chain's randomness. Once a day is over it is held by a call from the game's server (every
+  minute it looks for days to hold; only the server's account or the owner may make that call). Every draw is
+  kept with its winners and the transaction that held it.
 - What NEAR makes possible here: function-call access keys (the game key that can only call the game's small
   actions and can never move NEAR), named accounts made for players by the network's registrar, NEAR Auth's
   MPC-held keys for sign-in without a wallet, fees small enough that every cast can be a transaction
@@ -146,7 +152,7 @@ They are not driven by a language model: the rules are plain code that can be re
 | `public/vendor/` | The wallet and NEAR Auth libraries, packed into browser files (`npm run vendor`, `npm run vendor:auth`) |
 | `art/` | The pixel art and the site's icons, drawn by code (`npm run art`) |
 | `public/music/` | The one piece of music, generated with a music model (see the note in that folder). There are no other sounds |
-| `test/` | Tests of the sea, the replay and the boats' rules |
+| `test/` | Tests of the sea, the replay and the boats' rules. `test/model/` is the economy as it was modelled before the contract existed; the game does not use it |
 
 ## Tests
 
@@ -207,7 +213,14 @@ give the server the same names in its settings, and deploy. The steps are writte
 - The server and the helper use free public nodes of NEAR unless `NEAR_RPC` names another; those turn a busy
   server away.
 - NEAR Auth on testnet works at `http://localhost:3000` only, until NEAR Auth approves the hosted address.
-- The contract has not been audited.
+- The contract has not been audited. Its account is also its own owner, and the wasm on the chain was built on
+  a developer's machine, not reproducibly: the source here is what was deployed, but the chain cannot prove it.
+- The server is trusted to check catches honestly; the contract only checks that the server's account reports
+  them. A day's quest is worked out from the day's number, so a coming day's quest can be known ahead.
+- Nearly all orders on the markets are the computer's boats' so far, and the boats trade only while their
+  runner is up (`npm start` with their keys, or `npm run boats`).
+- The git history starts on 2026-11-13: the game was written outside git during the hackathon and brought in
+  as a set of layered commits, so the commit dates say nothing about when each part was made.
 
 ## Licence
 

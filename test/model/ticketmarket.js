@@ -1,11 +1,13 @@
+// A model of the ticket market with made-up traders, from before the contract existed. Not used by the game
+// (see quests.js beside it); the tests still run against it.
 // The ticket market, for NEAR. It works like a market for NFTs:
 //   - every ticket has its own number;
 //   - players list tickets at a price of their choosing, and anyone can buy a listed ticket;
 //   - players post offers ("I pay this much for a ticket"), and any holder can sell into an offer;
 //   - the seller pays a fee on every sale, which goes to the prize vault.
 // The other players are simulated for now. On chain later: the functions here are the ones a contract would have.
-import { TICKETS, DRAW, DAY_MS } from './config.js';
-import { mulberry32, between, intBetween, hash } from './rng.js';
+import { TICKETS, DRAW, DAY_MS } from '../../src/config.js';
+import { mulberry32, between, intBetween, hash } from '../../src/rng.js';
 import { drawOf, winChance, dayIndex, dayFraction, takeTickets, giveTicket } from './quests.js';
 
 const r2 = (n) => Math.round(n * 100) / 100, r3 = (n) => Math.round(n * 1000) / 1000;

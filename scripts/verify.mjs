@@ -146,6 +146,7 @@ await check('The server tells the game which accounts are computer boats', async
   if (!server) return noServer;
   const a = await ask('/api/npcs');
   if (a.status !== 200 || !Array.isArray(a.body)) return { fail: `${a.status}` };
+  if (!a.body.length) return { skip: 'that server runs no boats and names none (a local copy without keys does not)' };
   const live = a.body.filter((b) => b.doing).length;
   return `${a.body.length} boats named${live ? `; ${live} report what they are doing, e.g. ${a.body.find((b) => b.doing).name}: "${a.body.find((b) => b.doing).why}"` : ' (no runner is reporting what they do right now)'}`;
 });

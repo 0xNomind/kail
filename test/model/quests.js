@@ -1,8 +1,12 @@
+// A model of the quest, the draw and the fish market as they were worked out BEFORE the contract existed.
+// The game does not use this file: the contract (contract/src) is the real thing. It is kept here because the
+// economy's numbers were tuned with it and the tests in this folder still run against it (test/economy.mjs,
+// test/sim.test.mjs).
 // The daily quest, tickets, the draw, and the two markets.
 // Inside the game everything is coins: bait, upgrades, trading fish. Outside it, at the Harbour, everything is NEAR:
 // topping up coins, trading tickets, the draw. Nothing gives out coins for free: the quest pays a ticket.
-import { FISH, RARE, ITEM_BY_ID, QUEST, DRAW, MARKET, MONEY, DAY_MS } from './config.js';
-import { mulberry32, between, intBetween, hash } from './rng.js';
+import { FISH, RARE, ITEM_BY_ID, QUEST, DRAW, MARKET, MONEY, DAY_MS } from '../../src/config.js';
+import { mulberry32, between, intBetween, hash } from '../../src/rng.js';
 
 export const dayIndex = (nowMs) => Math.floor(nowMs / DAY_MS);
 export const dayFraction = (nowMs) => (nowMs % DAY_MS) / DAY_MS;

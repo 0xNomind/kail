@@ -6,8 +6,8 @@ import { W, FLOOR, PIVOT, HOOK, PULL, FISH, JUNK, CHEST, RARE, UPGRADES, BAIT, S
 import { play } from './bot.mjs';
 import { newWorld, newPlayer, step, cast, release, entities, storageUsed, storageCap, buyBait, buyUpgrade, reelSpeed } from '../src/sim.js';
 import { questsFor, othersTook, stockLeft, giveToQuest, giveAll, stillNeeds, doneCount, enterDraw, settleDraws, drawOf, winChance, topUp, fairPrice, neededToday,
-  forSale, buyFromPlayers, playerBid, playersStillWant, sellToPlayers, payout, listForSale, takeBack, tickMarket, mintTickets, numberTickets } from '../src/quests.js';
-import { ticketWorth, listings, offers, floorPrice, bestOffer, buyListing, acceptOffer, listTickets, cancelListing, placeOffer, cancelOffer, offerEscrow, tickTickets, activity, afterFee } from '../src/ticketmarket.js';
+  forSale, buyFromPlayers, playerBid, playersStillWant, sellToPlayers, payout, listForSale, takeBack, tickMarket, mintTickets, numberTickets } from './model/quests.js';
+import { ticketWorth, listings, offers, floorPrice, bestOffer, buyListing, acceptOffer, listTickets, cancelListing, placeOffer, cancelOffer, offerEscrow, tickTickets, activity, afterFee } from './model/ticketmarket.js';
 
 const DT = 1 / 60;
 
