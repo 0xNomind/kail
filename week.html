@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/png" sizes="192x192" href="public/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="public/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#fbe3b4">
+  <title>Kail: a week in a minute</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/site.css">
+</head>
+<body class="harbour week">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="./"><img class="px" data-icon="hook" data-k="2" alt="">Kail</a>
+      <nav aria-label="Main">
+        <a href="harbour">Harbour</a>
+        <a href="tickets">Tickets</a>
+        <a href="week" aria-current="page">Week</a>
+        <a class="btn primary small" href="play">Play now</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wide">
+    <h1>A week in a minute</h1>
+    <p class="lead">Ten boats the computer plays go through seven days of Kail, here in your browser: the rules they play by on NEAR, the real sea, and a model of the contract's rules. Nothing is sent anywhere, and nothing here is on the chain.</p>
+
+    <!-- Everything below is on the page from the start, with its room set aside, and is filled in as the week
+         goes: nothing appears, grows or moves while it plays. -->
+    <section class="panel player" aria-labelledby="h-run">
+      <h2 id="h-run" class="visually-hidden">The week</h2>
+      <div class="controls">
+        <button class="btn primary" type="button" id="start">Play the week</button>
+        <button class="btn" type="button" id="skip" disabled>Skip to the end</button>
+        <label>Which week <input id="seed" inputmode="numeric" value="1" title="Every number is its own week, and the same number always plays the same week."></label>
+        <label>New fishers on day 3 <select id="more"><option value="0">none</option><option value="10">10 more</option><option value="30">30 more</option></select></label>
+      </div>
+      <ol class="daysbar" id="bar" aria-label="The seven days"></ol>
+      <div class="nowbox" role="status" aria-live="polite">
+        <p class="nowline" id="now">Press “Play the week”. Each day takes about eight seconds.</p>
+        <p class="whyline" id="why">While it plays, this line shows what one boat after another decides, in the boat's own words.</p>
+      </div>
+    </section>
+
+    <div class="strip six" id="big" aria-live="off"></div>
+
+    <section class="panel" aria-labelledby="h-charts">
+      <h2 id="h-charts">How it moved</h2>
+      <div class="sparks" id="sparks"></div>
+    </section>
+
+    <div class="weekgrid">
+      <section class="panel flat" aria-labelledby="h-days">
+        <h2 id="h-days">Day by day</h2>
+        <div class="scrollx" tabindex="0"><table class="tbl" id="days"></table></div>
+        <p class="note">Prize: what a full draw could pay that day, a fifth of the prize money when the day began; a winning ticket gets a hundredth of it. Earned: tickets from quests. Fish: how many changed hands.</p>
+      </section>
+      <section class="panel flat" aria-labelledby="h-boats">
+        <h2 id="h-boats">The boats</h2>
+        <div class="scrollx" tabindex="0"><table class="tbl" id="boats"></table></div>
+        <p class="note">NEAR: what a boat has more or less than it started with, counting what it is owed.</p>
+      </section>
+    </div>
+
+    <section class="panel" aria-labelledby="h-said">
+      <h2 id="h-said">What the boats decided, and why</h2>
+      <ul class="saidlist" id="saidList" tabindex="0"><li class="empty">The boats' decisions are listed here as the week goes, newest first.</li></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="h-books">
+      <h2 id="h-books">The books</h2>
+      <p id="books">After every day everything is added up: NEAR, coins, tickets, fish. A tick under a day means nothing appeared or vanished without a rule for it.</p>
+      <p class="note">The same week from the command line: <code>npm run simulate</code>. The model is <code>src/model.js</code>, the boats' rules are <code>src/npc-rules.js</code>, and <code>npm run verify</code> checks the model against the contract on NEAR.</p>
+    </section>
+  </main>
+  <script type="module" src="src/weekpage.js"></script>
+</body>
+</html>

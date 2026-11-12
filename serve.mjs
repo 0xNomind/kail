@@ -82,7 +82,7 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
   '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ico': 'image/x-icon' };
 
 const HELPER = { '/api/auth/open': 'open', '/api/auth/sign': 'sign', '/api/welcome': 'bait' };
-const SITE = /^\/(index|play|harbour|tickets)\.html$|^\/favicon\.ico$|^\/(src|public)\/[^?#]+$/;
+const SITE = /^\/(index|play|harbour|tickets|week)\.html$|^\/favicon\.ico$|^\/(src|public)\/[^?#]+$/;
 const answer = (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (elsewhere && url.pathname.startsWith('/api/')) { passOn(req, res).catch((e) => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: `The game's server at ${elsewhere} did not answer: ${String(e?.message || e).slice(0, 120)}` }))); return; }

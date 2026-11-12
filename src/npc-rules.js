@@ -6,9 +6,9 @@
 // it and a draw has somebody to win against. They get no favours: no free coins, no fish out of thin air.
 //
 // This file is all of their thinking. `decide` looks at the game as the contract shows it and names ONE next step,
-// with the reason in plain words; the runner (npc.mjs) carries it out and asks again. Players can read the reason
+// with the reason in plain words; the runner (server/npc.mjs) carries it out and asks again. Players can read the reason
 // in the game. Change a number here and the fishers behave differently; nothing else has to change.
-import { QUEST, UPGRADES } from '../src/config.js';
+import { QUEST, UPGRADES } from './config.js';
 
 // ---- who they are
 // pays:     how much of "what it would cost me to fish it" this fisher offers when buying (1 = the full cost)

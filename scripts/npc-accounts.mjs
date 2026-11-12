@@ -1,4 +1,4 @@
-// Makes the NEAR accounts for the other boats (server/npc-rules.mjs), all in one go:
+// Makes the NEAR accounts for the other boats (src/npc-rules.js), all in one go:
 //
 //   node scripts/npc-accounts.mjs            every fisher gets an account
 //   node scripts/npc-accounts.mjs 3          only the first three
@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { FISHERS } from '../server/npc-rules.mjs';
+import { FISHERS } from '../src/npc-rules.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NEAR = [path.join(os.homedir(), '.cargo/bin/near'), 'near'].find((p) => p === 'near' || fs.existsSync(p));

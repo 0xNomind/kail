@@ -11,7 +11,7 @@
 // Settings: [vars] in wrangler.toml for the names, and secrets for the keys (NEAR_KEY, WELCOME_KEY); see README.md.
 import game, { holdDraws } from './game.mjs';
 import { makeRelay } from './relay.mjs';
-import { FISHERS } from './npc-rules.mjs';
+import { FISHERS } from '../src/npc-rules.js';
 
 const HELPER = { '/api/auth/open': 'open', '/api/auth/sign': 'sign', '/api/welcome': 'bait' };
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });

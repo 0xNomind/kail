@@ -1,4 +1,4 @@
-// The other boats, run. What they decide is in npc-rules.mjs; this file only carries a decision out and asks again.
+// The other boats, run. What they decide is in npc-rules.js; this file only carries a decision out and asks again.
 //
 // A fisher here does what a player's browser does, with the same calls: the contract for bait, quest, markets and
 // draw, and the game's server for catches. It throws its hook in a sea the server gave it, a robot steers and
@@ -6,7 +6,7 @@
 // the contract or in the server knows that these accounts are not people.
 //
 // Which accounts: NPCS in server/.dev.vars, a list of account names separated by commas ("account=Name" gives an
-// account one fisher of npc-rules.mjs by name; without it they are handed out in order). Each account needs its
+// account one fisher of npc-rules.js by name; without it they are handed out in order). Each account needs its
 // key on this machine, where the NEAR CLI puts it: ~/.near-credentials/<network>/<account>.json (create the
 // account with "save-to-legacy-keychain"), or the system keychain (then the NEAR CLI signs, which is slower).
 import fs from 'node:fs';
@@ -15,10 +15,10 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { Account, FailoverRpcProvider, JsonRpcProvider, KeyPair, KeyPairSigner, actions } from 'near-api-js';
-import { FISHERS, decide } from './npc-rules.mjs';
+import { FISHERS, decide } from '../src/npc-rules.js';
 import { newWorld, step, cast, release, entities } from '../src/sim.js';
 import { TICK, REST_TICKS, makeRecorder, roundX } from '../src/replay.js';
-import { makeBot } from '../test/bot.mjs';
+import { makeBot } from '../src/bot.js';
 
 // The node the players' browsers ask first is kept for last: ten boats asking it all day would use up the
 // allowance it gives one address, and the game in the browser would be turned away.
@@ -149,7 +149,7 @@ async function throwOnce(n, want, api) {
 // server are not crowded, and a player's own catch does not wait behind theirs.
 const AT_SEA = 3;
 export function startNpcs({ env, api, say = () => {} }) {
-  // NPCS is a list of accounts. They get the fishers of npc-rules.mjs in order; "account=Name" picks one by name.
+  // NPCS is a list of accounts. They get the fishers of npc-rules.js in order; "account=Name" picks one by name.
   const ids = String(env.NPCS || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => x.split('='));
   const urls = env.NEAR_RPC ? [env.NEAR_RPC] : NODES[env.NEAR_NETWORK || 'testnet'];
   const boats = ids.map(([account, called], i) => ({ account, who: FISHERS.find((f) => f.name === called) || FISHERS[i % FISHERS.length], call: signer(account, env, urls), turns: 0,

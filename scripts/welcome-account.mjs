@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Account, FailoverRpcProvider, JsonRpcProvider, KeyPair, KeyPairSigner, actions, baseEncode, encodeTransaction } from 'near-api-js';
-import { FISHERS } from '../server/npc-rules.mjs';
+import { FISHERS } from '../src/npc-rules.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NEAR = [path.join(os.homedir(), '.cargo/bin/near'), 'near'].find((p) => p === 'near' || fs.existsSync(p));

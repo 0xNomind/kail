@@ -1,6 +1,6 @@
-// The other boats' thinking (server/npc-rules.mjs), tried on made-up states of the game: no chain needed.
+// The other boats' thinking (src/npc-rules.js), tried on made-up states of the game: no chain needed.
 // node test/npc.test.mjs
-import { FISHERS, decide, worth } from '../server/npc-rules.mjs';
+import { FISHERS, decide, worth } from '../src/npc-rules.js';
 import { mulberry32 } from '../src/rng.js';
 
 const by = (n) => FISHERS.find((f) => f.name === n);

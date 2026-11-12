@@ -7,7 +7,7 @@
 //
 // The account's key is read from where the NEAR CLI keeps it; it needs a bait and room in storage.
 import { throwOnce, signer, BOAT_NODES } from '../server/npc.mjs';
-import { FISHERS } from '../server/npc-rules.mjs';
+import { FISHERS } from '../src/npc-rules.js';
 
 const [account, server = 'http://localhost:3000', want = 'anchovy'] = process.argv.slice(2);
 if (!account) { console.log('usage: node test/throw-once.mjs <account> [server address] [fish wanted]'); process.exit(1); }

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NET, NETWORK } from '../src/network.js';
+import { questOf, priceFor } from '../src/model.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2), asJson = args.includes('--json');
@@ -72,6 +73,13 @@ await check("The price of a coin is worked out from the day's prize: prize / (50
   if (!S.draw.fixed) return { skip: "today's prize is not set aside yet (nothing touched the contract today), so today's price cannot be compared" };
   const step = 10n ** 18n, low = 10n ** 19n, raw = BigInt(S.draw.pool) / (500n * 44n), up = ((raw + step - 1n) / step) * step, expected = up < low ? low : up;
   return BigInt(S.coin_price) === expected ? `prize ${near(S.draw.pool)} gives ${near(expected)} a coin, and the contract says ${near(S.coin_price)}` : { fail: `expected ${expected}, the contract says ${S.coin_price}` };
+});
+await check('The week played fast (npm run simulate) uses the contract\'s own rules: its quest and its coin price are the chain\'s', async () => {
+  const mine = JSON.stringify(questOf(S.quest.day).needs), theirs = JSON.stringify(S.quest.needs);
+  if (mine !== theirs) return { fail: `for day ${S.quest.day} the model says ${mine}, the contract ${theirs}` };
+  if (!S.draw.fixed) return `quest of day ${S.quest.day}: both say ${theirs} (today's prize is not set aside yet, so the coin price was not compared)`;
+  const price = priceFor(BigInt(S.draw.pool));
+  return price === BigInt(S.coin_price) ? `quest of day ${S.quest.day}: both say ${theirs}; coin price for today's prize: both say ${near(price)}` : { fail: `coin price: the model says ${price}, the contract ${S.coin_price}` };
 });
 await check('Draws are held on the chain; one ticket in five wins; each is kept with the transaction that held it', async () => {
   const past = S.past_draws.filter((d) => d.settled);

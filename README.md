@@ -17,7 +17,8 @@ For a reviewer, human or program. Node 20 or newer.
 ```bash
 npm install       # no build step follows
 npm run verify    # reads NEAR testnet and checks this README's claims, one line each
-npm test          # the sea, the replay check, the boats' rules (a few seconds)
+npm run simulate  # a week of the game's economy in about a second: no network, no keys
+npm test          # the sea, the replay check, the boats' rules, the model of the contract (a few seconds)
 npm start         # the pages, at http://localhost:3000; /play is a practice sea when nobody is signed in
 ```
 
@@ -28,6 +29,16 @@ and ends with a line like `9 held, 0 did not, 5 skipped`. The five skipped ones 
 `npm run verify -- --server <address>` checks those too, against the hosted game or against
 `http://localhost:3000` on a machine that has the server's key. `--json` gives the same as JSON.
 
+`npm run simulate` plays seven days of the game at once: the ten boats, with the rules they play by on the
+chain, fishing in the real sea, against a model of the contract's rules written in JavaScript (`src/model.js`).
+It prints each day's prize, coin price, tickets earned and drawn, winners, what fish traded for, where every
+boat ended, and a few of the boats' decisions with their reasons. The same seed always plays the same week
+(it prints a fingerprint), and after every day it adds up its books: if NEAR, coins, tickets or fish appeared or
+vanished without a rule for it, it says where and exits with 1. `--days`, `--seed`, `--newcomers 3:10` and
+`--json` change it. It is a model, not the chain: `npm run verify` checks that the model gives the contract's
+quest and the contract's coin price for today, and `test/model.test.mjs` holds it against the contract's rules.
+The same week can be watched in the browser at `/week`.
+
 Where each claim lives, and how to check it:
 
 | Claim | Code | Check |
@@ -35,7 +46,8 @@ Where each claim lives, and how to check it:
 | A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
 | Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
 | The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (58 tests) |
-| The computer's boats are accounts that play by readable rules | `server/npc-rules.mjs`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
+| The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
+| The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
 | Sign-in with Google, Apple or email | `src/nearauth.js`, `server/relay.mjs` | by hand, at `http://localhost:3000` (see "Signing in") |
 
@@ -92,6 +104,7 @@ Steps a judge can follow:
 | Open **Board → Quest**, hand in the three things asked for | A ticket |
 | Open **Harbour** | Top up coins with NEAR, put tickets into today's draw, see earlier draws with the transaction that held each, collect NEAR you won |
 | Open **Tickets** | The ticket market, for NEAR: buy one sale, or several of the cheapest at once in one transaction |
+| Open `/week` and press **Start** | Seven days of the economy in about a minute: the boats' decisions with their reasons, each day's prize, coin price, tickets and winners, and where every boat ends |
 
 On testnet a "day" is one hour, so a quest and a draw come round every hour. The pages say so.
 
@@ -112,7 +125,7 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
 
 ## The computer's boats
 
-`server/npc-rules.mjs` holds ten fishers and the one function that decides a boat's next step from the
+`src/npc-rules.js` holds ten fishers and the one function that decides a boat's next step from the
 contract's state: fish for the quest, hand it in, list a spare fish at a price worked out from what bait costs,
 buy what is cheaper than fishing it, take a ticket offer, enter the draw, upgrade, rest. Each step comes with its
 reason in words; the reason behind an order shows in the game when the order is opened.
@@ -142,10 +155,12 @@ They are not driven by a language model: the rules are plain code that can be re
 | `index.html`, `play.html`, `harbour.html`, `tickets.html`, `src/` | The pages. Plain HTML, CSS and JavaScript modules, served as written |
 | `src/sim.js`, `src/replay.js`, `src/dmath.js` | The sea: fixed steps, own arithmetic, so that it plays out the same in every browser and on the server |
 | `src/network.js` | Everything that differs between testnet and mainnet |
+| `src/npc-rules.js`, `src/bot.js` | The boats' rules, and the robot that works the reel for them |
+| `src/model.js`, `src/week.js`, `week.html` | The contract's rules as a fast model, and a week played through it (`npm run simulate`, `/week`) |
 | `contract/` | The contract |
 | `server/game.mjs` | The game's server: hands out a sea, plays a catch again, lands it, holds the draws |
 | `server/relay.mjs` | The helper for new players and NEAR Auth |
-| `server/npc-rules.mjs`, `server/npc.mjs` | The computer's boats |
+| `server/npc.mjs` | Runs the boats on the chain: each signs with its own key |
 | `serve.mjs` | Runs all of it on one machine with Node |
 | `server/boats.mjs` | Runs only the boats, against a hosted server (`npm run boats`) |
 | `server/worker.mjs`, `server/wrangler.toml` | The same server as a Cloudflare Worker |

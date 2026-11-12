@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), out = path.join(root, 'dist');
-const PAGES = ['index.html', 'play.html', 'harbour.html', 'tickets.html', 'favicon.ico'], FOLDERS = ['src', 'public'];
+const PAGES = ['index.html', 'play.html', 'harbour.html', 'tickets.html', 'week.html', 'favicon.ico'], FOLDERS = ['src', 'public'];
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 let files = 0, bytes = 0;
