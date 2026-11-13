@@ -1,7 +1,7 @@
 //! Fishing: a cast spends one bait, and the game's server says what came up.
 //! Also the storage (how many fish and chest finds fit) and the two upgrades.
 use near_sdk::json_types::{Base64VecU8, U64};
-use near_sdk::{AccountId, env, near, require};
+use near_sdk::{AccountId, Gas, NearToken, Promise, PromiseOrValue, env, near, require};
 
 use crate::{BAIT, CHEST, COIN, Contract, ContractExt, is_fish};
 
@@ -14,6 +14,8 @@ const REEL_COST: [u128; 4] = [40, 90, 200, 400];
 /// In the game a chest takes at least this long to come back after it was brought up. The chain holds every
 /// player to it, so nobody can claim a chest with every cast.
 const CHEST_EVERY_MS: u64 = 20_000;
+/// Gas for the contract's own call that opens a chest (see `land`): always the same, whatever the caller sent.
+const OPEN_CHEST_GAS: Gas = Gas::from_tgas(8);
 /// Bait a new player is welcomed with.
 const WELCOME_BAIT: u128 = 5;
 const GREETER: &[u8] = b"greeter";
@@ -66,13 +68,14 @@ impl Contract {
 
     /// The game's server says what a cast brought up: a kind of fish, or "chest". It needs the cast's secret,
     /// which it can only have from the player who cast.
-    /// A chest's content is decided here, by the chain's own randomness, so neither the player nor the
-    /// server can pick it. Gives the kind that went into storage, or nothing when the storage was full.
+    /// A chest's content is decided by the chain's own randomness, in a second step the caller cannot undo
+    /// (`chest_opened`), so neither the player nor the server can pick it. Gives the kind that went into
+    /// storage (for a chest: once that second step has run), or nothing when the storage was full.
     ///
     /// `sea` is the server's mark for the player's sea as it is after this catch. The server checks a catch by
     /// playing the player's moves again in the sea that belongs to the mark kept here, so a sea from before an
     /// earlier catch (with that fish still in it) can never be used again.
-    pub fn land(&mut self, player: Option<AccountId>, cast: U64, what: String, secret: Base64VecU8, sea: Option<String>, approval: Option<Base64VecU8>) -> Option<String> {
+    pub fn land(&mut self, player: Option<AccountId>, cast: U64, what: String, secret: Base64VecU8, sea: Option<String>, approval: Option<Base64VecU8>) -> PromiseOrValue<Option<String>> {
         let caller = env::predecessor_account_id();
         let player = if caller == self.minter {
             // the server lands it for the player
@@ -99,17 +102,39 @@ impl Contract {
             env::storage_write(&sea_key(&player), mark.as_bytes());
         }
 
-        let kind: &str = if what == "chest" {
+        if what == "chest" {
             let now = Self::now_ms();
             require!(now >= p.last_chest_at + CHEST_EVERY_MS, "The chest has not come back yet");
             p.last_chest_at = now;
             self.profiles.insert(player.clone(), p.clone());
-            self.open_chest(&player, cast.0)
-        } else {
-            require!(is_fish(&what), "No such fish");
-            &what
-        };
+            if p.held >= storage_cap(p.storage) {
+                env::log_str("Storage full: the chest is lost");
+                return PromiseOrValue::Value(None);
+            }
+            // What is in the chest is not rolled here but in a call of the contract to itself, which runs
+            // afterwards and apart from the caller's transaction. Rolled here, a caller could put a second
+            // call behind this one that fails when the find is not the wanted one: all of it would be undone,
+            // the cast would be in the water again, and the same chest could be opened until it suited.
+            // This way the cast is spent before anybody can know what the chest holds.
+            let args = near_sdk::serde_json::json!({ "player": player, "cast": cast }).to_string().into_bytes();
+            return PromiseOrValue::Promise(Promise::new(env::current_account_id()).function_call("chest_opened".to_string(), args, NearToken::from_yoctonear(0), OPEN_CHEST_GAS));
+        }
+        require!(is_fish(&what), "No such fish");
         if p.held >= storage_cap(p.storage) {
+            env::log_str(&format!("Storage full: the {what} is lost"));
+            return PromiseOrValue::Value(None);
+        }
+        self.mint(&player, &[(what.as_str(), 1)], Some("catch"));
+        PromiseOrValue::Value(Some(what))
+    }
+
+    /// The second half of landing a chest: the chain's own randomness picks the find, and it goes into the
+    /// player's storage. Only the contract can call this, from `land`. Gives the kind, or nothing when the
+    /// storage has filled up in between.
+    #[private]
+    pub fn chest_opened(&mut self, player: AccountId, cast: U64) -> Option<String> {
+        let kind = self.open_chest(&player, cast.0);
+        if self.profile(&player).held >= storage_cap(self.profile(&player).storage) {
             env::log_str(&format!("Storage full: the {kind} is lost"));
             return None;
         }

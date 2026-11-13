@@ -103,7 +103,7 @@ ok('every call costs its sender the network\'s fee, and the books still close', 
   c.call('a', 'top_up', price * 10n);
   assert.equal(before - c.wallet('a'), price * 10n + 4n * NEAR / 10000n);     // 4.0 Tgas at 0.0001 NEAR a Tgas
   c.call('a', 'buy_bait', 1); c.call('a', 'cast'); c.call('a', 'land', 'anchovy');
-  assert.equal(c.money().fees, (40n + 29n + 28n + 31n) * NEAR / 100000n);   // the player paid for four calls, their own catch among them
+  assert.equal(c.money().fees, (40n + 29n + 28n + 33n) * NEAR / 100000n);   // the player paid for four calls, their own catch among them
   assert.equal(c.money().serverFees, 0n);                                    // the server sends nothing for a catch
   refused(() => c.call('nobody', 'cast'), /Not enough NEAR/);                // no NEAR, no transaction
   assert.deepEqual(c.audit(), []);

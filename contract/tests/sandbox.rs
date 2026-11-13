@@ -69,6 +69,8 @@ async fn a_whole_day_of_the_game_on_a_local_chain() -> testresult::TestResult<()
     // Alice cannot land her own catch
     assert!(call(&alice, "cast", json!({ "seal": seal }), none).await?);
     assert!(!call(&alice, "land", json!({ "player": alice.account_id(), "cast": "1", "what": "crown", "secret": secret }), none).await?);
+    // nor take the contract's own second step of opening a chest
+    assert!(!call(&alice, "chest_opened", json!({ "player": alice.account_id(), "cast": "1" }), none).await?);
     // and the server cannot land it without her secret
     assert!(!call(&kail, "land", json!({ "player": alice.account_id(), "cast": "1", "what": "tuna", "secret": "Z3Vlc3M=" }), none).await?);
 
@@ -114,11 +116,14 @@ async fn a_whole_day_of_the_game_on_a_local_chain() -> testresult::TestResult<()
     assert!(call(&alice, "list_item", json!({ "token_id": "shark", "amount": 1, "price": "20" }), none).await?);
     let listing = view("item_orders", json!({})).await?[0]["id"].clone();
     assert!(!call(&bob, "buy_item", json!({ "order": listing, "amount": 1 }), none).await?, "Bob has no coins yet");
+    // (the vault has grown since the day began, by Alice's top-up: a coin costs more than the lowest price now)
+    let price: U128 = near_sdk::serde_json::from_value(view("coin_price", json!({})).await?)?;
+    assert!(price.0 > 10u128.pow(19), "the price followed the vault");
     assert!(call(&bob, "top_up", json!({}), NearToken::from_near(1)).await?);
     assert!(call(&bob, "buy_item", json!({ "order": listing, "amount": 1 }), none).await?);
     let (a, b) = (player(&alice).await?, player(&bob).await?);
     assert_eq!(a["coins"].as_str().unwrap().parse::<u128>()?, coins_before + 20);
-    assert_eq!(b["coins"].as_str(), Some("99979"));
+    assert_eq!(b["coins"].as_str().unwrap().parse::<u128>()?, NearToken::from_near(1).as_yoctonear() / price.0 - 21);
     let bob_shark: U128 = near_sdk::serde_json::from_value(view("mt_balance_of", json!({ "account_id": bob.account_id(), "token_id": "shark" })).await?)?;
     assert_eq!(bob_shark, U128(1));
     assert_eq!(view("item_orders", json!({})).await?.as_array().unwrap().len(), 0);
@@ -147,8 +152,9 @@ async fn a_whole_day_of_the_game_on_a_local_chain() -> testresult::TestResult<()
         draw = view("draw", json!({ "day": before.to_string() })).await?;
     }
     let (day, pool): (String, u128) = (draw["day"].as_str().unwrap().to_string(), draw["pool"].as_str().unwrap().parse()?);
-    // the vault holds the 6 NEAR topped up and the ticket market's fee of 0.025 NEAR; a draw pays 20% of it
-    assert_eq!(pool, NearToken::from_millinear(1205).as_yoctonear());
+    // the vault holds the 6 NEAR topped up (but for the bit of Bob's NEAR that bought no whole coin and went
+    // back to him) and the ticket market's fee of 0.025 NEAR; a draw pays 20% of it
+    assert!(pool <= NearToken::from_millinear(1205).as_yoctonear() && pool > NearToken::from_millinear(1204).as_yoctonear(), "{pool}");
     // with tickets in a draw the length of a day cannot be changed: that would put the draw out of reach
     assert!(!call(&kail, "configure", json!({ "day_ms": "120000" }), none).await?, "not while a draw is waiting");
     // let the minute pass, and hold its draw

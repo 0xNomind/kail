@@ -49,7 +49,7 @@ Where each claim lives, and how to check it:
 | --- | --- | --- |
 | A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
 | Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
-| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (66 tests) |
+| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (67 tests) |
 | The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
 | The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
@@ -117,7 +117,7 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
 ## What is on NEAR
 
 - Contract: [`kail-game.testnet`](https://testnet.nearblocks.io/address/kail-game.testnet), source in
-  [`contract/`](contract/README.md) (Rust, near-sdk). 66 unit tests and a test on a local chain.
+  [`contract/`](contract/README.md) (Rust, near-sdk). 67 unit tests and a test on a local chain.
 - Who pays the network: whoever acts. A player pays for their own cast and for their own catch (about 0.0003
   NEAR each), sent by the game's key without a wallet window. The game's server only signs its approval of a
   catch, which costs nothing. It holds the daily draws from an account of its own, `kail-server.testnet`, and
@@ -288,8 +288,6 @@ give the server the same names in its settings, and deploy. The steps are writte
   - Coins do not expire, so coins bought while the vault is small can be spent when it is bigger. The price
     follows the vault at once when it grows, which closes the worst of it; somebody filling every draw for weeks
     with coins bought ahead could still take out more than they put in.
-  - A chest's find is rolled in the transaction that lands it. A player who writes their own transactions can
-    make an unwanted find fail and try again, at the cost of the fees.
   - Storage for players' data is paid from the contract's own balance, and a day's entries are never removed:
     the account needs NEAR beyond the vault, more as the game is used.
   - The server keeps no memory of a throw: a changed client can try a throw as often as it likes offline and

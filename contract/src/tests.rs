@@ -55,12 +55,34 @@ fn cast_refused(c: &mut Contract, who: usize) -> bool {
     let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.cast(seal()))).is_err();
     refused && c.player(accounts(who)).bait == bait
 }
+/// Lands a catch as whoever is calling now. A fish is in storage at once; for a chest the contract calls itself
+/// afterwards to open it, which these tests do in its place: the same moment and the same roll of the chain,
+/// the caller being the contract (account 0).
+fn land(c: &mut Contract, player: Option<AccountId>, cast: U64, what: &str, secret: near_sdk::json_types::Base64VecU8, sea: Option<String>, approval: Option<near_sdk::json_types::Base64VecU8>) -> Option<String> {
+    let caller = env::predecessor_account_id();
+    let who = player.clone().unwrap_or_else(|| caller.clone());
+    match c.land(player, cast, what.to_string(), secret, sea, approval) {
+        near_sdk::PromiseOrValue::Value(v) => v,
+        near_sdk::PromiseOrValue::Promise(_) => {
+            let (ms, seed): (u64, [u8; 32]) = (env::block_timestamp_ms(), env::random_seed().try_into().unwrap());
+            let as_account = |id: AccountId| {
+                let mut b = VMContextBuilder::new();
+                b.current_account_id(accounts(0)).signer_account_id(id.clone()).predecessor_account_id(id).block_timestamp(ms * 1_000_000).random_seed(seed);
+                testing_env!(b.build());
+            };
+            as_account(accounts(0));
+            let found = c.chest_opened(who, cast);
+            as_account(caller);
+            found
+        }
+    }
+}
 /// One throw that brings up `what`.
 fn catch(c: &mut Contract, who: usize, what: &str) -> Option<String> {
     as_player(who, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    c.land(Some(accounts(who)), cast, what.to_string(), secret(), None, None)
+    land(c, Some(accounts(who)), cast, what, secret(), None, None)
 }
 fn has(c: &Contract, who: usize, id: &str) -> u128 {
     c.mt_balance_of(accounts(who), id.to_string()).0
@@ -213,13 +235,13 @@ fn the_server_can_be_an_account_of_its_own() {
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(3, 0);
-    assert_eq!(c.land(Some(accounts(1)), cast, "anchovy".to_string(), secret(), None, None), Some("anchovy".to_string()));
+    assert_eq!(land(&mut c, Some(accounts(1)), cast, "anchovy", secret(), None, None), Some("anchovy".to_string()));
     assert_eq!(has(&c, 1, "anchovy"), 1);
     // the contract's own account, which was the server before, is refused
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.land(Some(accounts(1)), cast, "anchovy".to_string(), secret(), None, None))).is_err();
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| land(&mut c, Some(accounts(1)), cast, "anchovy", secret(), None, None))).is_err();
     assert!(refused);
     assert_eq!(has(&c, 1, "anchovy"), 1);
 }
@@ -247,27 +269,27 @@ fn a_player_lands_their_own_catch_with_the_servers_approval() {
     let cast = c.cast(seal());
     assert_eq!(cast.0, 1);
     // an approval of something else, of another sea mark, of another cast, or used by another account is worth nothing
-    assert!(refuses(|| c.land(None, cast, "crown".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
-    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), Some("mark-9".to_string()), Some(b64(APPROVES_ANCHOVY)))));
-    assert!(refuses(|| c.land(None, cast, "chest".to_string(), secret(), Some("mark-2".to_string()), Some(b64(APPROVES_CHEST)))));
+    assert!(refuses(|| land(&mut c, None, cast, "crown", secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "anchovy", secret(), Some("mark-9".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "chest", secret(), Some("mark-2".to_string()), Some(b64(APPROVES_CHEST)))));
     as_player(2, 0);
-    assert!(refuses(|| c.land(Some(accounts(1)), cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, Some(accounts(1)), cast, "anchovy", secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
     // without the sea's mark the approval is not the one the server signed
     as_player(1, 0);
-    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), None, Some(b64(APPROVES_ANCHOVY)))));
-    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), Some(String::new()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "anchovy", secret(), None, Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "anchovy", secret(), Some(String::new()), Some(b64(APPROVES_ANCHOVY)))));
     // the approved catch goes into the player's storage, and the sea's mark is kept
     as_player(1, 0);
-    assert_eq!(c.land(None, cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY))), Some("anchovy".to_string()));
+    assert_eq!(land(&mut c, None, cast, "anchovy", secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY))), Some("anchovy".to_string()));
     assert_eq!((has(&c, 1, "anchovy"), c.player(accounts(1)).sea), (1, Some("mark-1".to_string())));
     // the same approval a second time: that cast is not in the water any more
-    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "anchovy", secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
     assert_eq!(has(&c, 1, "anchovy"), 1);
     // a chest lands the same way, and the chain decides what is in it
     at(1, 0, 2 * MINUTE, 7);
     let cast = c.cast(seal());
     assert_eq!(cast.0, 2);
-    let found = c.land(None, cast, "chest".to_string(), secret(), Some("mark-2".to_string()), Some(b64(APPROVES_CHEST))).unwrap();
+    let found = land(&mut c, None, cast, "chest", secret(), Some("mark-2".to_string()), Some(b64(APPROVES_CHEST))).unwrap();
     assert!(["pearl", "goldbar", "crown"].contains(&found.as_str()));
 }
 #[test]
@@ -276,10 +298,33 @@ fn without_a_server_key_named_no_approval_counts() {
     funded(&mut c, 1, 1, 1);
     as_player(1, 0);
     let cast = c.cast(seal());
-    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| land(&mut c, None, cast, "anchovy", secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
     // and only the owner can name the key
     as_player(1, 0);
     assert!(refuses(|| c.set_server_key(Some(b64(SERVER_KEY_B64)))));
+}
+
+/// A chest is opened in a second step, by the contract itself. Landing it spends the cast and puts nothing into
+/// storage yet: whoever lands it cannot know the find, and so cannot undo the landing because of it.
+#[test]
+fn a_chest_is_opened_in_a_second_step() {
+    let mut c = fresh();
+    funded(&mut c, 1, 1, 2);
+    as_player(1, 0);
+    let cast = c.cast(seal());
+    as_player(0, 0);
+    let finds = |c: &Contract| has(c, 1, "pearl") + has(c, 1, "goldbar") + has(c, 1, "crown");
+    // the landing: the cast is spent, the chest's clock is set, and nothing is in storage
+    assert!(matches!(c.land(Some(accounts(1)), cast, "chest".to_string(), secret(), None, None), near_sdk::PromiseOrValue::Promise(_)));
+    assert_eq!((finds(&c), c.player(accounts(1)).open_cast), (0, None));
+    // landing the same cast again is refused: there is no second roll for it
+    assert!(refuses(|| c.land(Some(accounts(1)), cast, "chest".to_string(), secret(), None, None)));
+    // (that nobody but the contract can take the second step is checked on a local chain, in tests/sandbox.rs:
+    // the check lives in the exported call, which these tests do not go through)
+    // the contract takes it: one find is in storage
+    as_player(0, 0);
+    let found = c.chest_opened(accounts(1), cast).unwrap();
+    assert_eq!((finds(&c), has(&c, 1, &found)), (1, 1));
 }
 
 #[test]
@@ -289,7 +334,7 @@ fn a_player_cannot_land_their_own_catch() {
     funded(&mut c, 1, 1, 1);
     as_player(1, 0);
     let cast = c.cast(seal());
-    c.land(Some(accounts(1)), cast, "crown".to_string(), secret(), None, None);
+    land(&mut c, Some(accounts(1)), cast, "crown", secret(), None, None);
 }
 
 #[test]
@@ -300,8 +345,8 @@ fn one_cast_lands_only_once() {
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    c.land(Some(accounts(1)), cast, "tuna".to_string(), secret(), None, None);
-    c.land(Some(accounts(1)), cast, "tuna".to_string(), secret(), None, None);
+    land(&mut c, Some(accounts(1)), cast, "tuna", secret(), None, None);
+    land(&mut c, Some(accounts(1)), cast, "tuna", secret(), None, None);
 }
 
 #[test]
@@ -326,7 +371,7 @@ fn a_chest_holds_one_of_the_three_finds_and_the_chain_picks() {
         at(1, 0, now, seed);
         let cast = c.cast(seal());
         at(0, 0, now, seed);
-        let got = c.land(Some(accounts(1)), cast, "chest".to_string(), secret(), None, None).unwrap();
+        let got = land(&mut c, Some(accounts(1)), cast, "chest", secret(), None, None).unwrap();
         *seen.entry(got).or_insert(0u32) += 1;
     }
     assert_eq!(seen.values().sum::<u32>(), 30);
@@ -381,7 +426,7 @@ fn fill_quest(c: &mut Contract, who: usize) {
         at(who, 0, now, seed);
         let cast = c.cast(seal());
         at(0, 0, now, seed);
-        if c.land(Some(accounts(who)), cast, "chest".to_string(), secret(), None, None).as_deref() == Some(want.as_str()) {
+        if land(c, Some(accounts(who)), cast, "chest", secret(), None, None).as_deref() == Some(want.as_str()) {
             return;
         }
         // not the one the quest wants: back into the sea
@@ -1012,7 +1057,7 @@ fn a_cast_cannot_be_landed_without_the_players_secret() {
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    c.land(Some(accounts(1)), cast, "tuna".to_string(), b"a guess".to_vec().into(), None, None);
+    land(&mut c, Some(accounts(1)), cast, "tuna", b"a guess".to_vec().into(), None, None);
 }
 
 #[test]
@@ -1099,7 +1144,7 @@ fn the_three_chest_finds_are_equally_likely() {
         let mut b = VMContextBuilder::new();
         b.current_account_id(accounts(0)).predecessor_account_id(accounts(0)).block_timestamp(now * 1_000_000).random_seed(seed.try_into().unwrap());
         testing_env!(b.build());
-        let got = c.land(Some(accounts(1)), cast, "chest".to_string(), secret(), None, None).unwrap();
+        let got = land(&mut c, Some(accounts(1)), cast, "chest", secret(), None, None).unwrap();
         *seen.entry(got.clone()).or_insert(0u32) += 1;
         // make room again
         let mut b = VMContextBuilder::new();
@@ -1128,7 +1173,7 @@ fn a_catch_is_lost_only_when_the_storage_filled_up_while_the_hook_was_down() {
     // while the hook is down the player buys a shark: the storage is full now
     c.buy_item(sale, 1);
     as_player(0, 0);
-    assert_eq!(c.land(Some(accounts(1)), cast, "anchovy".to_string(), secret(), None, None), None);
+    assert_eq!(land(&mut c, Some(accounts(1)), cast, "anchovy", secret(), None, None), None);
     assert_eq!(c.player(accounts(1)).held, 16);
 }
 
@@ -1273,20 +1318,20 @@ fn a_catch_leaves_the_servers_mark_of_the_sea_and_the_view_counts_the_casts() {
     assert_eq!((c.player(accounts(1)).casts, c.player(accounts(1)).sea), (U64(0), None));
     let cast = c.cast(seal());
     as_player(0, 0);
-    assert_eq!(c.land(Some(accounts(1)), cast, "tuna".to_string(), secret(), Some("mark-one".to_string()), None), Some("tuna".to_string()));
+    assert_eq!(land(&mut c, Some(accounts(1)), cast, "tuna", secret(), Some("mark-one".to_string()), None), Some("tuna".to_string()));
     assert_eq!((c.player(accounts(1)).casts, c.player(accounts(1)).sea), (U64(1), Some("mark-one".to_string())));
     // a catch reported without a mark leaves the old one; another player's mark is their own
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    c.land(Some(accounts(1)), cast, "tuna".to_string(), secret(), None, None);
+    land(&mut c, Some(accounts(1)), cast, "tuna", secret(), None, None);
     assert_eq!(c.player(accounts(1)).sea, Some("mark-one".to_string()));
     assert_eq!(c.player(accounts(2)).sea, None);
     // a full storage still moves the mark: the fish is gone from the sea either way
     as_player(1, 0);
     let cast = c.cast(seal());
     as_player(0, 0);
-    c.land(Some(accounts(1)), cast, "tuna".to_string(), secret(), Some("mark-two".to_string()), None);
+    land(&mut c, Some(accounts(1)), cast, "tuna", secret(), Some("mark-two".to_string()), None);
     assert_eq!((c.player(accounts(1)).casts, c.player(accounts(1)).sea), (U64(3), Some("mark-two".to_string())));
 }
 

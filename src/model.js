@@ -32,9 +32,10 @@ export const MAX_WINNERS = 100, DRAW_CAP = 500, PLAYER_CAP = 10, ONE_IN = 5;
 export const FEES = { cast: 2.8, buy_bait: 2.9, throw_back: 2.6, upgrade: 2.9, hand_in: 4.7, top_up: 4.0, list_item: 2.7, want_item: 3.0, cancel_item_order: 3.5, buy_item: 5.5, sell_item: 4.7,
   enter_draw: 3.2, claim: 3.2, sell_tickets: 2.9, buy_tickets: 4.1, add_prize: 3.0,
   bid_tickets: 3.0 /* like want_item */, fill_bid: 4.1 /* like buy_tickets */, cancel_order: 3.5 /* like cancel_item_order */,
-  // a catch is sent to the contract by the player who made it, with the server's approval of it (3.1 Tgas, with
-  // the check of the server's signature in it): the one who fishes pays for their own catch
-  land: 3.1,
+  // a catch is sent to the contract by the player who made it, with the server's approval of it (3.3 Tgas, with
+  // the check of the server's signature in it): the one who fishes pays for their own catch. A chest takes a
+  // second step on the contract, which opens it: 5.7 Tgas in all.
+  land: 3.3, land_chest: 5.7,
   // these two are sent, and paid for, by the game's own accounts, not by the player
   settle_draw: 4.6, welcome: 3.0 /* like bid_tickets */ };
 const BY_SERVER = new Set(['settle_draw', 'welcome']);
@@ -405,7 +406,7 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
       undo = [];
       try {
         // the network's fee first, from whoever sends the transaction: the player, or the game's server
-        if (fees) { const fee = networkFee(method), payer = BY_SERVER.has(method) ? SERVER : who; pay(payer, fee); put(c, BY_SERVER.has(method) ? 'serverFees' : 'fees', (BY_SERVER.has(method) ? c.serverFees : c.fees) + fee); }
+        if (fees) { const fee = networkFee(method === 'land' && args[0] === 'chest' ? 'land_chest' : method), payer = BY_SERVER.has(method) ? SERVER : who; pay(payer, fee); put(c, BY_SERVER.has(method) ? 'serverFees' : 'fees', (BY_SERVER.has(method) ? c.serverFees : c.fees) + fee); }
         const out = f(who, ...args); undo = null; return out;
       }
       catch (e) { for (const back of undo.reverse()) back(); undo = null; throw e; }
