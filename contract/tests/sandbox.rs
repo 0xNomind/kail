@@ -115,6 +115,9 @@ async fn a_whole_day_of_the_game_on_a_local_chain() -> testresult::TestResult<()
     let coins_before: u128 = player(&alice).await?["coins"].as_str().unwrap().parse()?;
     assert!(call(&alice, "list_item", json!({ "token_id": "shark", "amount": 1, "price": "20" }), none).await?);
     let listing = view("item_orders", json!({})).await?[0]["id"].clone();
+    // the shark on sale is held by the contract, and its balance says so (as the transfer's event did)
+    let held = async |id: &str| -> testresult::TestResult<U128> { Ok(near_sdk::serde_json::from_value(view("mt_balance_of", json!({ "account_id": kail.account_id(), "token_id": id })).await?)?) };
+    assert_eq!(held("shark").await?, U128(1));
     assert!(!call(&bob, "buy_item", json!({ "order": listing, "amount": 1 }), none).await?, "Bob has no coins yet");
     // (the vault has grown since the day began, by Alice's top-up: a coin costs more than the lowest price now)
     let price: U128 = near_sdk::serde_json::from_value(view("coin_price", json!({})).await?)?;
@@ -126,12 +129,20 @@ async fn a_whole_day_of_the_game_on_a_local_chain() -> testresult::TestResult<()
     assert_eq!(b["coins"].as_str().unwrap().parse::<u128>()?, NearToken::from_near(1).as_yoctonear() / price.0 - 21);
     let bob_shark: U128 = near_sdk::serde_json::from_value(view("mt_balance_of", json!({ "account_id": bob.account_id(), "token_id": "shark" })).await?)?;
     assert_eq!(bob_shark, U128(1));
+    assert_eq!(held("shark").await?, U128(0));
     assert_eq!(view("item_orders", json!({})).await?.as_array().unwrap().len(), 0);
 
     // the ticket market: Bob sells the ticket he was given for 0.5 NEAR, Alice buys it, Bob collects real NEAR
     let half = NearToken::from_millinear(500);
     assert!(call(&bob, "sell_tickets", json!({ "amount": 1, "price": half.as_yoctonear().to_string() }), none).await?);
     let order = view("ticket_orders", json!({})).await?[0]["id"].clone();
+    assert_eq!(held("ticket").await?, U128(1));
+    // the standard's metadata and lists, as a wallet would ask for them
+    assert_eq!(view("mt_metadata_contract", json!({})).await?["spec"].as_str(), Some("mt-1.0.0"));
+    assert_eq!(view("mt_tokens", json!({})).await?.as_array().unwrap().len(), 16);
+    assert_eq!(view("mt_metadata_base_by_token_id", json!({ "token_ids": ["goldbar"] })).await?[0]["name"].as_str(), Some("Gold bar"));
+    let bobs = view("mt_tokens_for_owner", json!({ "account_id": bob.account_id() })).await?;
+    assert!(bobs.as_array().unwrap().iter().any(|t| t["token_id"] == "shark" && t["token_metadata"]["title"] == "Shark"), "{bobs}");
     assert!(!call(&alice, "buy_tickets", json!({ "order": order, "amount": 1 }), NearToken::from_millinear(100)).await?, "too little NEAR");
     assert!(call(&alice, "buy_tickets", json!({ "order": order, "amount": 1 }), half).await?);
     let bob_before = bob.tokens().near_balance().fetch_from(&net).await?.total;

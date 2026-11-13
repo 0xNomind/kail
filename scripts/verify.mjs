@@ -63,6 +63,16 @@ await check('Everything a player owns is a token of this one contract (NEP-245 r
   if (!Array.isArray(tokens) || tokens.some((t) => !t)) return { fail: `mt_token did not know every kind: ${JSON.stringify(tokens).slice(0, 120)}` };
   return `mt_supply: ${coin} coins, ${bait} bait, ${ticket} tickets, ${fish} anchovy in existence; mt_token knows coin, bait, ticket, anchovy`;
 });
+await check('Every kind of token has a name and can be listed (NEP-245 metadata and enumeration)', async () => {
+  const about = await view('mt_metadata_contract', {}), all = await view('mt_tokens', {});
+  if (about?.spec !== 'mt-1.0.0') return { fail: `mt_metadata_contract gave ${JSON.stringify(about).slice(0, 80)}` };
+  if (!Array.isArray(all) || all.length !== 16 || all.some((t) => !t.token_metadata?.title || !t.token_metadata?.description)) return { fail: `mt_tokens gave ${Array.isArray(all) ? all.length : 'no'} kinds, or one without a name` };
+  // what is up for sale is held by the contract, and its balance says so
+  const orders = await view('ticket_orders', { limit: 100 }), onSale = orders.filter((o) => !o.buying).reduce((a, o) => a + o.amount, 0);
+  const held = Number(await view('mt_balance_of', { account_id: CONTRACT, token_id: 'ticket' }));
+  if (orders.length < 100 && held < onSale) return { fail: `${onSale} tickets are up for sale but the contract's balance shows ${held}` };
+  return `"${about.name}", ${about.spec}: ${all.map((t) => t.token_metadata.title).join(', ')}. The contract's own balance shows the ${onSale} tickets it holds for sellers`;
+});
 await check('One read gives the quest, the draw, both markets, the vault and the coin price', async () => {
   S = await view('state', { account_id: null });
   const q = S.quest.needs.map(([id, n]) => `${n} ${id}`).join(', ');

@@ -24,7 +24,9 @@ What it does so far:
 | `history { account_id }` | Read-only: the latest 30 things that happened to an account (sales and purchases on both markets, quest tickets, draw prizes, top-ups), newest first. Both sides of a trade get their line, whether their game was open or not. |
 | `state { account_id }` | Read-only: everything a page shows in one answer (quest, draw, both markets, vault, coin price, and the named account's side and history). |
 | `player { account_id }` | Read-only: everything the game shows about one player. |
-| `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`, `mt_token` | The standard's read-only methods. |
+| `mt_balance_of`, `mt_batch_balance_of`, `mt_supply`, `mt_batch_supply`, `mt_token` | The standard's read-only methods. The contract's own account shows what it holds for open orders. |
+| `mt_metadata_contract`, `mt_metadata_token_all`, `mt_metadata_token_by_token_id`, `mt_metadata_base_by_token_id`, `mt_metadata_base_by_metadata_id` | The standard's metadata: a name and a description for each of the 16 kinds. |
+| `mt_tokens`, `mt_tokens_for_owner`, `mt_tokens_base_metadata_all` | The standard's lists: every kind, and the kinds an account holds. |
 | `mt_transfer`, `mt_batch_transfer` | The standard's transfers. Only tickets can be sent to another account. Coins, bait, fish and chest finds cannot: they change hands through the market only. |
 | `welcome { player }`, `welcomed`, `set_greeter`, `greeter` | A new account gets 5 bait, once. Only the owner or the greeter (the game's helper account, named by the owner) can give them. |
 | `relay_fee` (with NEAR attached) | What a player who signs in with NEAR Auth pays for having an approval signed: it is owed to the greeter, who sent the signing request, and collected with `claim`. With no greeter it goes into the vault. |
@@ -35,7 +37,7 @@ as it is when that day begins (the owner can change the share): it is set aside 
 and what comes in during the day counts for the days after. Over time all of it comes back to players as prizes. Nothing lets anybody
 take NEAR out of the vault any other way.
 
-Not there yet: the standard's `mt_transfer_call`.
+Not there: the standard's `mt_transfer_call` / `mt_batch_transfer_call` and approvals (a token cannot be handed to another contract).
 
 What the contract does not check: whether a player really caught the fish the server signed for. That is the
 server's job; the contract checks that the server did sign.

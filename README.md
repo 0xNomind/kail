@@ -51,7 +51,7 @@ Where each claim lives, and how to check it:
 | --- | --- | --- |
 | A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
 | Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
-| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (67 tests) |
+| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (70 tests) |
 | The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
 | The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
@@ -120,15 +120,25 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
 ## What is on NEAR
 
 - Contract: [`kail-game.testnet`](https://testnet.nearblocks.io/address/kail-game.testnet), source in
-  [`contract/`](contract/README.md) (Rust, near-sdk). 67 unit tests and a test on a local chain.
+  [`contract/`](contract/README.md) (Rust, near-sdk). 70 unit tests (`npm run test:contract`) and a test on a
+  local chain (`cd contract && cargo test --test sandbox`; it downloads a local NEAR node the first time).
 - Who pays the network: whoever acts. A player pays for their own cast and for their own catch (about 0.0003
   NEAR each), sent by the game's key without a wallet window. The game's server only signs its approval of a
   catch, which costs nothing. It holds the daily draws from an account of its own, `kail-server.testnet`, and
-  the vault pays that account back what each draw cost (about 0.0005 NEAR, by the gas used). So no account has
-  to be fed by hand while the game runs, the contract's account (with the vault) has no key of the server's on
-  it, and mainnet needs no other arrangement.
-- Tokens: one NEP-245 contract holds every kind. Only tickets can be sent to another account; coins, bait and
-  fish change hands through the market.
+  the vault pays that account back what each draw cost (about 0.0005 NEAR, by the gas used). So the server's
+  account does not have to be fed by hand while the game runs, and the contract's account (with the vault) has
+  no key of the server's on it. The boats pay their own fees like players, out of the NEAR each was given (about
+  10; a week of steady fishing costs one about 0.13 NEAR in the model), so they last many months and then need
+  NEAR again.
+- Tokens: one contract holds every kind, in the shape of NEP-245. It has the standard's `mt_transfer`,
+  `mt_batch_transfer`, `mt_token`, `mt_balance_of`, `mt_batch_balance_of`, `mt_supply` and `mt_batch_supply`;
+  the metadata extension (`mt_metadata_contract`, `mt_metadata_token_all`, `mt_metadata_token_by_token_id`,
+  `mt_metadata_base_by_token_id`, `mt_metadata_base_by_metadata_id`: a name and a description for each of the 16
+  kinds, no pictures); the enumeration extension (`mt_tokens`, `mt_tokens_for_owner`,
+  `mt_tokens_base_metadata_all`); and a `nep245` event for every mint, burn and transfer. It does not have
+  `mt_transfer_call` and `mt_batch_transfer_call` or the approval methods: a token cannot be handed to another
+  contract. Only tickets can be sent to another account; coins, bait and fish change hands through the market.
+  What is up for sale is held by the contract, and shows as the balance of the contract's own account.
 - The draw uses the chain's randomness. Once a day is over it is held by a call from the game's server (every
   minute it looks for days to hold; only the server's account or the owner may make that call). Every draw is
   kept with its winners and the transaction that held it.
@@ -188,9 +198,10 @@ They are not driven by a language model: the rules are plain code that can be re
 ## Tests
 
 ```bash
-npm test                 # the sea, the replay check, the boats' rules
-npm run test:contract    # the contract's unit tests (needs Rust)
-npm run build:contract   # builds the contract (needs cargo-near)
+npm test                 # the sea, the replay check, the boats' rules, the model of the contract
+npm run test:contract    # the contract's 70 unit tests (needs Rust)
+npm run build:contract   # builds the contract (needs cargo-near) and prints the wasm's hash
+(cd contract && cargo test --test sandbox)   # the contract on a local NEAR chain (downloads a node once)
 ```
 
 ## Running the server yourself

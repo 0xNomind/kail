@@ -4,8 +4,9 @@
 //! One contract, many kinds of token; an account holds an amount of each kind.
 //!
 //! What is here: the balances, minting, burning and moving (used by the game's rules), the standard's
-//! read-only methods, its events, and its plain transfers.
-//! What is not here yet: `mt_transfer_call` / `mt_batch_transfer_call` (handing tokens to another contract)
+//! read-only methods, its events, its plain transfers, its metadata (a name and a description for every
+//! kind) and its lists (every kind; the kinds an account holds).
+//! What is not here: `mt_transfer_call` / `mt_batch_transfer_call` (handing tokens to another contract)
 //! and approvals.
 //!
 //! Only tickets may be sent to another account. Coins, bait, fish and chest finds stay with their holder:
@@ -14,13 +15,123 @@ use near_sdk::json_types::U128;
 use near_sdk::serde_json::{Value, json};
 use near_sdk::{AccountId, assert_one_yocto, env, near, require};
 
-use crate::{BAIT, COIN, Contract, ContractExt, TICKET, TokenId, game, is_item};
+use crate::{BAIT, CHEST, COIN, Contract, ContractExt, DEEP, PRIZE_FISH, TICKET, TokenId, UPPER, game, is_item};
 
 /// The standard's description of a token. A kind that many accounts hold has no single owner.
 #[near(serializers = [json])]
 pub struct Token {
     pub token_id: TokenId,
     pub owner_id: Option<AccountId>,
+    pub token_metadata: Option<TokenMetadata>,
+    /// Every kind is its own class: this is the kind's id again.
+    pub base_metadata_id: String,
+}
+
+/// The standard's metadata (NEP-245, Metadata): for the contract, for a class of tokens, for a token.
+#[near(serializers = [json])]
+pub struct ContractMetadata {
+    pub spec: String,
+    pub name: String,
+}
+#[near(serializers = [json])]
+pub struct BaseTokenMetadata {
+    pub name: String,
+    pub id: String,
+    pub symbol: Option<String>,
+    pub icon: Option<String>,
+    pub decimals: Option<String>,
+    pub base_uri: Option<String>,
+    pub reference: Option<String>,
+    pub copies: Option<u64>,
+    pub reference_hash: Option<String>,
+}
+#[near(serializers = [json])]
+pub struct TokenMetadata {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub media: Option<String>,
+    pub media_hash: Option<String>,
+    pub issued_at: Option<String>,
+    pub expires_at: Option<String>,
+    pub starts_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub extra: Option<String>,
+    pub reference: Option<String>,
+    pub reference_hash: Option<String>,
+}
+#[near(serializers = [json])]
+pub struct TokenMetadataAll {
+    pub base: BaseTokenMetadata,
+    pub token: TokenMetadata,
+}
+
+/// Every kind of token, in the order the lists give them: the three of the game's economy, then the fish
+/// from the top of the sea down, then what a chest holds.
+pub(crate) fn kinds() -> Vec<&'static str> {
+    let mut all = vec![COIN, BAIT, TICKET];
+    all.extend(UPPER);
+    all.extend(DEEP);
+    all.push(PRIZE_FISH);
+    all.extend(CHEST.iter().map(|(id, _)| *id));
+    all
+}
+/// A kind's name as the game shows it, what it is in a sentence, and what sort of thing it is.
+fn about(id: &str) -> (String, &'static str, &'static str) {
+    let name = match id {
+        "goldbar" => "Gold bar".to_string(),
+        "crown" => "Old crown".to_string(),
+        _ => id[..1].to_uppercase() + &id[1..],
+    };
+    let (words, sort) = match id {
+        COIN => ("The game's money. Bought with NEAR at the day's price; pays for bait, upgrades and things on the market. Stays with its holder.", "coin"),
+        BAIT => ("One bait is one throw of the hook. Bought for 2 coins. Stays with its holder.", "bait"),
+        TICKET => ("Earned by finishing the day's quest. Goes into a daily draw for NEAR, or is sold to another player for NEAR. Can be sent to another account.", "ticket"),
+        PRIZE_FISH => ("A rare fish of the deepest water. No quest asks for it; it is traded for coins on the game's market.", "fish"),
+        _ if UPPER.contains(&id) => ("A fish of the upper water. Caught with the hook, asked for by some days' quest, traded for coins on the game's market.", "fish"),
+        _ if DEEP.contains(&id) => ("A big fish of the deep water. Caught with the hook, asked for by some days' quest, traded for coins on the game's market.", "fish"),
+        _ => ("Found in a chest on the sea floor. A day's quest asks for one chest find; traded for coins on the game's market.", "chest find"),
+    };
+    (name, words, sort)
+}
+fn base_metadata(id: &str) -> BaseTokenMetadata {
+    require!(exists(id), "No such kind of token");
+    BaseTokenMetadata {
+        name: about(id).0,
+        id: id.to_string(),
+        symbol: Some(id.to_uppercase()),
+        icon: None,
+        // every kind is counted in whole pieces
+        decimals: Some("0".to_string()),
+        base_uri: None,
+        reference: None,
+        copies: None,
+        reference_hash: None,
+    }
+}
+fn token_metadata(id: &str) -> TokenMetadata {
+    require!(exists(id), "No such kind of token");
+    let (name, words, sort) = about(id);
+    TokenMetadata {
+        title: Some(name),
+        description: Some(words.to_string()),
+        media: None,
+        media_hash: None,
+        issued_at: None,
+        expires_at: None,
+        starts_at: None,
+        updated_at: None,
+        extra: Some(json!({ "sort": sort, "can_be_sent": can_be_sent(id) }).to_string()),
+        reference: None,
+        reference_hash: None,
+    }
+}
+fn token(id: &str) -> Token {
+    Token { token_id: id.to_string(), owner_id: None, token_metadata: Some(token_metadata(id)), base_metadata_id: id.to_string() }
+}
+/// A part of a list, as the standard's lists are asked for: from this place on, at most so many.
+fn part<T>(all: Vec<T>, from_index: Option<U128>, limit: Option<u64>) -> Vec<T> {
+    let from = from_index.map_or(0, |f| f.0.min(all.len() as u128) as usize);
+    all.into_iter().skip(from).take(limit.map_or(usize::MAX, |l| l as usize)).collect()
 }
 
 /// The kinds of token this contract knows.
@@ -49,6 +160,26 @@ fn amounts(list: &[(&str, u128)]) -> Vec<String> {
 impl Contract {
     pub(crate) fn balance(&self, owner: &AccountId, id: &str) -> u128 {
         self.balances.get(&(owner.clone(), id.to_string())).copied().unwrap_or(0)
+    }
+    /// What the contract holds of a kind for the open orders on both markets: the things and tickets put up
+    /// for sale, and the coins behind offers to buy. Counted from the orders themselves.
+    pub(crate) fn held(&self, id: &str) -> u128 {
+        let things: u128 = self
+            .listings
+            .values()
+            .map(|o| match (o.buying, id) {
+                (false, _) if o.token_id == id => o.amount as u128,
+                (true, COIN) => o.price.0 * o.amount as u128,
+                _ => 0,
+            })
+            .sum();
+        let tickets: u128 = if id == TICKET { self.ticket_orders.values().filter(|o| !o.buying).map(|o| o.amount as u128).sum() } else { 0 };
+        things + tickets
+    }
+    /// An account's balance as the standard's methods give it. For the contract's own account that is what
+    /// it holds for open orders (the events say those tokens moved to it), plus anything sent to it.
+    fn shown(&self, owner: &AccountId, id: &str) -> u128 {
+        self.balance(owner, id) + if *owner == env::current_account_id() { self.held(id) } else { 0 }
     }
     /// Fish and chest finds take room in storage, whether they sit there or are up for sale.
     pub(crate) fn take_room(&mut self, owner: &AccountId, id: &str, n: u128) {
@@ -189,15 +320,15 @@ impl Contract {
     }
 
     pub fn mt_token(&self, token_ids: Vec<TokenId>) -> Vec<Option<Token>> {
-        token_ids.into_iter().map(|id| exists(&id).then_some(Token { token_id: id, owner_id: None })).collect()
+        token_ids.into_iter().map(|id| exists(&id).then(|| token(&id))).collect()
     }
 
     pub fn mt_balance_of(&self, account_id: AccountId, token_id: TokenId) -> U128 {
-        U128(self.balance(&account_id, &token_id))
+        U128(self.shown(&account_id, &token_id))
     }
 
     pub fn mt_batch_balance_of(&self, account_id: AccountId, token_ids: Vec<TokenId>) -> Vec<U128> {
-        token_ids.iter().map(|id| U128(self.balance(&account_id, id))).collect()
+        token_ids.iter().map(|id| U128(self.shown(&account_id, id))).collect()
     }
 
     /// How many of this kind exist, or nothing if there is no such kind.
@@ -207,5 +338,45 @@ impl Contract {
 
     pub fn mt_batch_supply(&self, token_ids: Vec<TokenId>) -> Vec<Option<U128>> {
         token_ids.into_iter().map(|id| self.mt_supply(id)).collect()
+    }
+
+    // ---- the standard's metadata: what each kind is called and what it is
+
+    pub fn mt_metadata_contract(&self) -> ContractMetadata {
+        ContractMetadata { spec: "mt-1.0.0".to_string(), name: "Kail".to_string() }
+    }
+
+    pub fn mt_metadata_token_all(&self, token_ids: Vec<TokenId>) -> Vec<TokenMetadataAll> {
+        token_ids.iter().map(|id| TokenMetadataAll { base: base_metadata(id), token: token_metadata(id) }).collect()
+    }
+
+    pub fn mt_metadata_token_by_token_id(&self, token_ids: Vec<TokenId>) -> Vec<TokenMetadata> {
+        token_ids.iter().map(|id| token_metadata(id)).collect()
+    }
+
+    pub fn mt_metadata_base_by_token_id(&self, token_ids: Vec<TokenId>) -> Vec<BaseTokenMetadata> {
+        token_ids.iter().map(|id| base_metadata(id)).collect()
+    }
+
+    /// (Every kind is its own class, so a class's id is the kind's id.)
+    pub fn mt_metadata_base_by_metadata_id(&self, base_metadata_ids: Vec<String>) -> Vec<BaseTokenMetadata> {
+        base_metadata_ids.iter().map(|id| base_metadata(id)).collect()
+    }
+
+    // ---- the standard's lists
+
+    /// Every kind of token there is.
+    pub fn mt_tokens(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
+        part(kinds(), from_index, limit).into_iter().map(token).collect()
+    }
+
+    /// The kinds an account holds some of.
+    pub fn mt_tokens_for_owner(&self, account_id: AccountId, from_index: Option<U128>, limit: Option<u64>) -> Vec<Token> {
+        let held: Vec<&str> = kinds().into_iter().filter(|id| self.shown(&account_id, id) > 0).collect();
+        part(held, from_index, limit).into_iter().map(token).collect()
+    }
+
+    pub fn mt_tokens_base_metadata_all(&self, from_index: Option<U128>, limit: Option<u64>) -> Vec<BaseTokenMetadata> {
+        part(kinds(), from_index, limit).into_iter().map(base_metadata).collect()
     }
 }

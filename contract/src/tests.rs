@@ -1426,3 +1426,114 @@ fn a_near_auth_player_pays_back_what_their_approval_cost() {
     as_player(1, 0);
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.relay_fee())).is_err());
 }
+
+// ---- the token standard's metadata and lists
+
+#[test]
+fn every_kind_of_token_has_a_name_and_a_description() {
+    let c = fresh();
+    let m = c.mt_metadata_contract();
+    assert_eq!((m.spec.as_str(), m.name.as_str()), ("mt-1.0.0", "Kail"));
+    let all = c.mt_tokens(None, None);
+    // coin, bait, ticket; six fish of the upper water, three of the deep, the sailfish; three chest finds
+    assert_eq!(all.len(), 16);
+    for t in &all {
+        assert!(mt::exists(&t.token_id), "{} is listed but is no kind of token", t.token_id);
+        assert_eq!(t.base_metadata_id, t.token_id);
+        let m = t.token_metadata.as_ref().unwrap();
+        assert!(m.title.as_ref().unwrap().len() > 2 && m.description.as_ref().unwrap().len() > 20);
+    }
+    let ids: Vec<String> = all.iter().map(|t| t.token_id.clone()).collect();
+    // each kind once
+    let mut once = ids.clone();
+    once.sort();
+    once.dedup();
+    assert_eq!(once.len(), 16);
+    // the three ways of asking say the same
+    let both = c.mt_metadata_token_all(ids.clone());
+    let bases = c.mt_metadata_base_by_token_id(ids.clone());
+    let by_class = c.mt_metadata_base_by_metadata_id(ids.clone());
+    let tokens = c.mt_metadata_token_by_token_id(ids.clone());
+    for i in 0..ids.len() {
+        assert_eq!(both[i].base.name, bases[i].name);
+        assert_eq!(bases[i].name, by_class[i].name);
+        assert_eq!(both[i].token.title, tokens[i].title);
+        assert_eq!(bases[i].id, ids[i]);
+        assert_eq!(bases[i].decimals.as_deref(), Some("0"));
+    }
+    assert_eq!(c.mt_metadata_base_by_token_id(vec!["goldbar".to_string(), "tuna".to_string(), "ticket".to_string()]).iter().map(|b| b.name.clone()).collect::<Vec<_>>(), ["Gold bar", "Tuna", "Ticket"]);
+    // only a ticket says it can be sent
+    for t in &all {
+        let extra = t.token_metadata.as_ref().unwrap().extra.clone().unwrap();
+        assert_eq!(extra.contains("\"can_be_sent\":true"), t.token_id == TICKET, "{extra}");
+    }
+    // the same token through mt_token; a kind that does not exist is nothing there and is refused elsewhere
+    let one = c.mt_token(vec!["tuna".to_string(), "dragon".to_string()]);
+    assert_eq!(one[0].as_ref().unwrap().token_metadata.as_ref().unwrap().title.as_deref(), Some("Tuna"));
+    assert!(one[1].is_none());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.mt_metadata_token_by_token_id(vec!["dragon".to_string()]))).is_err());
+}
+
+#[test]
+fn the_lists_come_in_parts() {
+    let mut c = fresh();
+    let all: Vec<String> = c.mt_tokens(None, None).into_iter().map(|t| t.token_id).collect();
+    let part: Vec<String> = c.mt_tokens(Some(U128(3)), Some(4)).into_iter().map(|t| t.token_id).collect();
+    assert_eq!(part, all[3..7]);
+    assert_eq!(c.mt_tokens(Some(U128(16)), None).len(), 0);
+    assert_eq!(c.mt_tokens(Some(U128(1000)), Some(5)).len(), 0);
+    assert_eq!(c.mt_tokens_base_metadata_all(Some(U128(14)), None).len(), 2);
+    // what an account holds: nothing at first, then the kinds it has some of, in the lists' order
+    assert_eq!(c.mt_tokens_for_owner(accounts(1), None, None).len(), 0);
+    funded(&mut c, 1, 1, 4);
+    c.mint(&accounts(1), &[("shark", 2), ("pearl", 1)], None);
+    let mine: Vec<String> = c.mt_tokens_for_owner(accounts(1), None, None).into_iter().map(|t| t.token_id).collect();
+    assert_eq!(mine, ["coin", "bait", "shark", "pearl"]);
+    let last: Vec<String> = c.mt_tokens_for_owner(accounts(1), Some(U128(2)), Some(1)).into_iter().map(|t| t.token_id).collect();
+    assert_eq!(last, ["shark"]);
+}
+
+#[test]
+fn what_is_held_for_orders_shows_as_the_contracts_balance() {
+    let mut c = fresh();
+    funded(&mut c, 1, 2, 0);
+    funded(&mut c, 2, 2, 0);
+    c.mint(&accounts(1), &[("shark", 5), (TICKET, 4)], None);
+    let total = |c: &Contract, id: &str| c.mt_balance_of(accounts(0), id.to_string()).0 + c.mt_balance_of(accounts(1), id.to_string()).0 + c.mt_balance_of(accounts(2), id.to_string()).0;
+    for id in ["shark", TICKET, COIN] {
+        assert_eq!(c.mt_balance_of(accounts(0), id.to_string()).0, 0);
+        assert_eq!(total(&c, id), c.mt_supply(id.to_string()).unwrap().0);
+    }
+    // three sharks and two tickets go up for sale; somebody else offers coins for sharks
+    as_player(1, 0);
+    let sale = c.list_item("shark".to_string(), 3, U128(20));
+    as_player(1, 0);
+    c.sell_tickets(2, U128(NEAR / 2));
+    as_player(2, 0);
+    c.want_item("tuna".to_string(), 2, U128(9));
+    assert_eq!(c.mt_balance_of(accounts(0), "shark".to_string()).0, 3);
+    assert_eq!(c.mt_balance_of(accounts(1), "shark".to_string()).0, 2);
+    assert_eq!(c.mt_balance_of(accounts(0), TICKET.to_string()).0, 2);
+    assert_eq!(c.mt_balance_of(accounts(0), COIN.to_string()).0, 18);
+    assert_eq!(c.mt_batch_balance_of(accounts(0), vec!["shark".to_string(), TICKET.to_string(), COIN.to_string(), "tuna".to_string()]).iter().map(|n| n.0).collect::<Vec<_>>(), [3, 2, 18, 0]);
+    let holds: Vec<String> = c.mt_tokens_for_owner(accounts(0), None, None).into_iter().map(|t| t.token_id).collect();
+    assert_eq!(holds, ["coin", "ticket", "shark"]);
+    // nothing appeared or vanished: every kind still adds up to its supply
+    for id in ["shark", TICKET, COIN] {
+        assert_eq!(total(&c, id), c.mt_supply(id.to_string()).unwrap().0, "{id}");
+    }
+    // one shark is bought: the contract holds two, and the books still close (the fee's coins are burned)
+    as_player(2, 0);
+    c.buy_item(sale, 1);
+    assert_eq!(c.mt_balance_of(accounts(0), "shark".to_string()).0, 2);
+    assert_eq!(c.mt_balance_of(accounts(2), "shark".to_string()).0, 1);
+    for id in ["shark", TICKET, COIN] {
+        assert_eq!(total(&c, id), c.mt_supply(id.to_string()).unwrap().0, "{id}");
+    }
+    // the rest is taken back: the contract holds no shark again
+    as_player(1, 0);
+    c.cancel_item_order(sale);
+    assert_eq!(c.mt_balance_of(accounts(0), "shark".to_string()).0, 0);
+    assert_eq!(total(&c, "shark"), c.mt_supply("shark".to_string()).unwrap().0);
+}
+
