@@ -37,5 +37,6 @@
     "node": ">=20"
   },
   "description": "A fishing game whose economy runs on a NEAR contract: fish and tickets are NEP-245 tokens, catches are replayed and checked by a server, and computer-played boats trade with their own accounts.",
+  "homepage": "https://kail.nomind.dev",
   "author": "0xNomind"
 }

@@ -2,6 +2,7 @@
 # Sends Kail from this machine to the machine that hosts it, over SSH. Run in the project's folder:
 #
 #   deploy/push.sh user@machine --setup kail.example.com    once: make the machine ready (runs deploy/setup.sh there)
+#   deploy/push.sh user@machine --setup kail.example.com --cloudflare    the same, behind Cloudflare's proxy
 #   deploy/push.sh user@machine --keys                      the code AND the keys, then a start
 #   deploy/push.sh user@machine                             the code only (after a change), then a start
 #   deploy/push.sh user@machine --look                      only say what would be sent
@@ -17,12 +18,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 HOST="${1:-}"; shift || true
-[ -n "$HOST" ] && [ "${HOST#-}" = "$HOST" ] || { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
-KEYS=0; LOOK=0; SETUP=""
+[ -n "$HOST" ] && [ "${HOST#-}" = "$HOST" ] || { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+KEYS=0; LOOK=0; SETUP=""; BEHIND=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --keys) KEYS=1 ;;
     --look) LOOK=1 ;;
+    --cloudflare) BEHIND="--cloudflare" ;;
     --setup) SETUP="${2:-}"; [ -n "$SETUP" ] || { echo "--setup needs the address people will open."; exit 1; }; shift ;;
     *) echo "Not known: $1"; exit 1 ;;
   esac
@@ -33,10 +35,10 @@ export COPYFILE_DISABLE=1      # macOS: no ._ files in what is sent
 AS_ROOT='if [ "$(id -u)" = 0 ]; then S=""; else S="sudo -n"; fi'
 
 if [ -n "$SETUP" ]; then
-  echo "Making $HOST ready for https://$SETUP …"
+  echo "Making $HOST ready for https://$SETUP${BEHIND:+ (behind the Cloudflare proxy)} …"
   [ "$LOOK" = 1 ] && { echo "(--look: would send deploy/setup.sh and deploy/kail.service and run the first as root)"; exit 0; }
-  tar -czf - -C deploy setup.sh kail.service | ssh "$HOST" 'rm -rf /tmp/kail-setup && mkdir -p /tmp/kail-setup && tar -xzf - -C /tmp/kail-setup'
-  ssh "$HOST" "$AS_ROOT; \$S bash /tmp/kail-setup/setup.sh '$SETUP'; rm -rf /tmp/kail-setup"
+  tar --no-xattrs -czf - -C deploy setup.sh kail.service | ssh "$HOST" 'rm -rf /tmp/kail-setup && mkdir -p /tmp/kail-setup && tar -xzf - -C /tmp/kail-setup'
+  ssh "$HOST" "$AS_ROOT; \$S bash /tmp/kail-setup/setup.sh '$SETUP' $BEHIND; rm -rf /tmp/kail-setup"
   exit 0
 fi
 
@@ -67,10 +69,10 @@ fi
 
 ssh "$HOST" "$AS_ROOT; \$S test -d /opt/kail && id kail >/dev/null" || { echo "That machine is not ready yet (no /opt/kail or no user kail). First:  deploy/push.sh $HOST --setup <address>"; exit 1; }
 
-git ls-files -z | tar --null -T - -czf - | ssh "$HOST" "$AS_ROOT; \$S rm -rf /opt/kail.incoming && \$S mkdir -p /opt/kail.incoming && \$S tar -xzf - -C /opt/kail.incoming --no-same-owner"
+git ls-files -z | tar --no-xattrs --null -T - -czf - | ssh "$HOST" "$AS_ROOT; \$S rm -rf /opt/kail.incoming && \$S mkdir -p /opt/kail.incoming && \$S tar -xzf - -C /opt/kail.incoming --no-same-owner"
 if [ "$KEYS" = 1 ]; then
   ssh "$HOST" "$AS_ROOT; \$S install -d -o kail -g kail -m 700 /home/kail/.near-credentials /home/kail/.near-credentials/$network"
-  tar -czf - -C "$HOME/.near-credentials/$network" "${keyfiles[@]}" | ssh "$HOST" "$AS_ROOT; \$S tar -xzf - -C /home/kail/.near-credentials/$network --no-same-owner && \$S chown -R kail:kail /home/kail/.near-credentials && \$S chmod 600 /home/kail/.near-credentials/$network/*.json"
+  tar --no-xattrs -czf - -C "$HOME/.near-credentials/$network" "${keyfiles[@]}" | ssh "$HOST" "$AS_ROOT; \$S tar -xzf - -C /home/kail/.near-credentials/$network --no-same-owner && \$S chown -R kail:kail /home/kail/.near-credentials && \$S find /home/kail/.near-credentials/$network -name '*.json' -exec chmod 600 {} +"
   # the settings go straight from this machine into their place, readable by the service's user only
   ssh "$HOST" "$AS_ROOT; \$S install -d -o root -g kail -m 750 /opt/kail /opt/kail/server && \$S install -o kail -g kail -m 600 /dev/stdin /opt/kail/server/.dev.vars" < "$vars"
   echo "Keys are in place."
@@ -81,13 +83,13 @@ ssh "$HOST" "$AS_ROOT; set -e
   \$S rsync -a --delete --exclude node_modules --exclude server/.dev.vars --exclude .address /opt/kail.incoming/ /opt/kail/
   \$S rm -rf /opt/kail.incoming
   cd /opt/kail
-  \$S env HOME=/root npm ci --omit=dev --no-audit --no-fund --ignore-scripts 2>&1 | tail -2
-  # the code and the packages belong to root; the service's user may read them and nothing more
+  # the system's own Node, the one the service runs (setup.sh put it there)
+  \$S env HOME=/root PATH=/usr/bin:/bin npm ci --omit=dev --no-audit --no-fund --ignore-scripts 2>&1 | tail -2
+  # the code, the packages and the settings belong to root; the service's user may read them and nothing more
   \$S chown -R root:kail /opt/kail
   \$S chmod -R u=rwX,g=rX,o= /opt/kail
-  [ -f /opt/kail/server/.dev.vars ] && \$S chown kail:kail /opt/kail/server/.dev.vars && \$S chmod 600 /opt/kail/server/.dev.vars
   \$S systemctl restart kail
   sleep 6
   \$S systemctl is-active kail >/dev/null && echo 'The service is running.' || { echo 'THE SERVICE DID NOT START:'; \$S journalctl -u kail -n 25 --no-pager; exit 1; }
   \$S journalctl -u kail -n 6 --no-pager -o cat | cut -c1-160
-  echo \"Address: https://\$(cat /opt/kail/.address 2>/dev/null || echo '<the address given to setup.sh>')\""
+  echo \"Address: https://\$(\$S cat /opt/kail/.address 2>/dev/null || echo '<the address given to setup.sh>')\""

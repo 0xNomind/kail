@@ -3,6 +3,8 @@
 A fishing game in the browser whose economy runs on a NEAR contract. Built at NEAR Hackathon, for the tracks
 `games` and `open`. It is on NEAR **testnet**.
 
+Play it: **https://kail.nomind.dev**
+
 - You throw a hook, pull up fish and chests, fill the day's quest for tickets, and put tickets into a daily draw
   that pays NEAR out of a prize vault. Fish, chest finds and tickets are traded between players.
 - Everything a player owns (coins, bait, fish, chest finds, tickets) is a token of one contract, in the shape of
@@ -84,7 +86,8 @@ A game that pays out real tokens has three weak spots, and this project is an at
 
 ## Try it
 
-Hosted: _the address is added here after the first deploy._
+Hosted: **https://kail.nomind.dev** (NEAR testnet). Sign in there with a NEAR wallet; `/play` is a practice sea
+without signing in. `npm run verify -- --server https://kail.nomind.dev` checks the hosted server too.
 
 On your own machine (Node 20 or newer):
 
@@ -224,6 +227,10 @@ deploy/push.sh user@machine                            # later: new code only, t
 
 - The address given to `--setup` must already point at the machine; Caddy gets its HTTPS certificate by itself.
   Without a name of your own, `<the machine's IP with dashes>.sslip.io` works.
+- Behind Cloudflare's proxy (the DNS record "Proxied", the zone's SSL/TLS mode "Full"), add `--cloudflare` to
+  the `--setup` line: the machine's IP stays out of the DNS, Caddy makes its own certificate, answers
+  Cloudflare's addresses only, and counts each visitor by the address Cloudflare reports. Port 443 must be open.
+- The system's own Node (`/usr/bin/node`) runs the game; a Node in somebody's home folder is left alone.
 - `deploy/setup.sh` stops without changing anything if another program already answers on ports 80 or 443.
 - The code sent is exactly what git tracks. The keys travel only with `--keys`, into folders only the service's
   user can read: `server/.dev.vars`, and the key files of the welcome account and of the boats named in `NPCS`.
