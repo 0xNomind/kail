@@ -1,7 +1,7 @@
 # The game on Cloudflare: one Worker for the pages and the server (server/worker.mjs).
 #   npm run build     copies the pages into dist/
 #   npm run deploy    builds, then publishes (after "npx wrangler login")
-# The keys are secrets, never written here: see README.md, "Hosting on Cloudflare".
+# The keys are secrets, never written here: see README.md, "Hosting".
 name = "kail"
 main = "worker.mjs"
 compatibility_date = "2025-09-01"

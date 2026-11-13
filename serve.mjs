@@ -78,6 +78,9 @@ if (env.NEAR_KEY) {
 // One address: http://localhost:3000. NEAR Auth's sign-in client for testnet (shared by everybody trying it out)
 // only lets a site at exactly that address sign people in, so the whole game lives there.
 const port = Number(process.env.PORT || 3000);
+// HOST=127.0.0.1 keeps it to this machine alone, for when a web server in front of it (Caddy, with HTTPS) is the
+// way in from outside (deploy/kail.service). Without it, as before: reachable from the same network too.
+const host = process.env.HOST || undefined;
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ico': 'image/x-icon' };
 
@@ -108,4 +111,4 @@ const answer = (req, res) => {
 };
 http.createServer(answer)
   .on('error', (e) => { console.log(e.code === 'EADDRINUSE' ? `Port ${port} is taken by another program. Close that one and start again.` : String(e)); process.exit(1); })
-  .listen(port, () => console.log(`Kail is at http://localhost:${port}${elsewhere ? ` (its server: ${elsewhere})` : env.NEAR_KEY ? '' : ' (no server key here: the pages work, catches cannot be landed; see README.md)'}`));
+  .listen(port, host, () => console.log(`Kail is at http://localhost:${port}${elsewhere ? ` (its server: ${elsewhere})` : env.NEAR_KEY ? '' : ' (no server key here: the pages work, catches cannot be landed; see README.md)'}`));

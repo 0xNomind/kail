@@ -168,6 +168,7 @@ They are not driven by a language model: the rules are plain code that can be re
 | `serve.mjs` | Runs all of it on one machine with Node |
 | `server/boats.mjs` | Runs only the boats, against a hosted server (`npm run boats`) |
 | `server/worker.mjs`, `server/wrangler.toml` | The same server as a Cloudflare Worker |
+| `deploy/` | Hosting on one machine: `setup.sh` (once, on the machine), `kail.service`, `push.sh` (code and keys over SSH) |
 | `public/vendor/` | The wallet and NEAR Auth libraries, packed into browser files (`npm run vendor`, `npm run vendor:auth`) |
 | `art/` | The pixel art and the site's icons, drawn by code (`npm run art`) |
 | `public/music/` | The one piece of music, generated with a music model (see the note in that folder). There are no other sounds |
@@ -178,6 +179,7 @@ They are not driven by a language model: the rules are plain code that can be re
 ```bash
 npm test                 # the sea, the replay check, the boats' rules
 npm run test:contract    # the contract's unit tests (needs Rust)
+npm run build:contract   # builds the contract (needs cargo-near)
 ```
 
 ## Running the server yourself
@@ -187,21 +189,46 @@ The server's settings are listed in [`server/dev.vars.example`](server/dev.vars.
 helper account (`npm run welcome`) and the boats' accounts (`npm run npcs`) are made on testnet by those scripts.
 `npm start` then runs the pages, the server, the helper and the boats.
 
-## Hosting on Cloudflare
+## Hosting
 
-One Worker serves the pages and the server (`server/worker.mjs`). Keys are Worker secrets and are never written
-into a file of this repository.
+### On one machine that stays on (the simple way)
+
+The game is one process, `node serve.mjs`: the pages, the game's server and the computer's boats together, the
+same as on a developer's machine. A small VPS runs it (with the ten boats going it uses a little over 100 MB of memory). `deploy/` has what that
+takes, for Debian or Ubuntu:
+
+```bash
+# on your own machine, in this folder; the login must be root or have sudo without a password
+deploy/push.sh user@machine --setup kail.example.com   # once: Node, Caddy (HTTPS), a user, the service
+deploy/push.sh user@machine --keys                     # the code and the keys, then a start
+deploy/push.sh user@machine                            # later: new code only, then a start
+```
+
+- The address given to `--setup` must already point at the machine; Caddy gets its HTTPS certificate by itself.
+  Without a name of your own, `<the machine's IP with dashes>.sslip.io` works.
+- `deploy/setup.sh` stops without changing anything if another program already answers on ports 80 or 443.
+- The code sent is exactly what git tracks. The keys travel only with `--keys`, into folders only the service's
+  user can read: `server/.dev.vars`, and the key files of the welcome account and of the boats named in `NPCS`.
+- The service (`deploy/kail.service`) listens on the machine itself only, starts with the machine, starts again
+  if it stops, and may write nothing. `journalctl -u kail -f` shows what the boats do.
+- Run the boats in one place at a time: once they run there, stop `npm start` on the machine that has the keys,
+  or start it without them (`KAIL_SERVER=https://<the address> npm start` on a copy that has no
+  `server/.dev.vars`: the pages from here, the server from there).
+
+### On Cloudflare, with the boats elsewhere
+
+One Worker can serve the pages and the server (`server/worker.mjs`), but not the boats: they need a process that
+stays up. So this way needs a second machine anyway, and is here for when the pages should not depend on it.
+Keys are Worker secrets and are never written into a file of this repository.
 
 ```bash
 npx wrangler login       # once, in your browser
-npm run secrets          # hands NEAR_KEY and WELCOME_KEY to Cloudflare, without showing them
 npm run deploy           # copies the pages into dist/ and publishes
+npm run secrets          # hands NEAR_KEY and WELCOME_KEY to Cloudflare, without showing them
 ```
 
-`npm run worker` runs the same Worker on your machine in Cloudflare's runtime.
-
-The computer's boats need a process that stays up, which a Worker is not. They run by themselves on any
-machine that stays on (a small VPS will do) and play through the hosted server like players:
+`npm run worker` runs the same Worker on your machine in Cloudflare's runtime. The boats then run by themselves
+on a machine that stays on, and play through the hosted server like players:
 
 ```bash
 # on that machine: Node 20 or newer, this repository, and the boats' keys in ~/.near-credentials/testnet/
@@ -210,11 +237,10 @@ KAIL_SERVER=https://<the hosted address> BOATS_TOKEN=<from server/.dev.vars> \
 NPCS="kail-old-tom.testnet=Old Tom,kail-maggie.testnet=Maggie,..." npm run boats
 ```
 
-That machine holds the boats' keys and nothing else: not the game's key, not the helper's. Every two minutes the
-runner tells the hosted server who the boats are, what each is doing and why (`BOATS_TOKEN` is the password
-between the two; `npm run secrets` makes it up); the game shows that beside their orders. Run the boats in one
-place at a time. Without a runner the hosted game still shows their standing orders, since those are on the
-contract, and names them from `NPCS` in `server/wrangler.toml`.
+That machine holds the boats' keys and nothing else. Every two minutes the runner tells the hosted server who
+the boats are, what each is doing and why (`BOATS_TOKEN` is the password between the two; `npm run secrets`
+makes it up); the game shows that beside their orders. Without a runner the hosted game still shows their
+standing orders, since those are on the contract, and names them from `NPCS` in `server/wrangler.toml`.
 
 ## Going to mainnet
 

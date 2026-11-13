@@ -11,6 +11,7 @@
     "verify": "node scripts/verify.mjs",
     "simulate": "node scripts/simulate.mjs",
     "build": "node scripts/build-site.mjs",
+    "build:contract": "bash contract/build.sh",
     "worker": "npm run build && wrangler dev -c server/wrangler.toml",
     "deploy": "npm run build && wrangler deploy -c server/wrangler.toml",
     "secrets": "node scripts/cloudflare-secrets.mjs",

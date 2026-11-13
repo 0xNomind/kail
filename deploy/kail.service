@@ -1,0 +1,33 @@
+# Kail on one machine that stays on: the pages, the game's server and the computer's boats, as one process
+# (node serve.mjs), started with the machine and started again if it stops. Put in place by deploy/setup.sh.
+#
+#   systemctl status kail        is it running
+#   journalctl -u kail -f        what it says (the boats tell every step they take)
+#   systemctl restart kail       after new code or new keys
+[Unit]
+Description=Kail: pages, game server and the computer's boats
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=kail
+Group=kail
+WorkingDirectory=/opt/kail
+# only this machine can reach it directly; the world comes in through Caddy, which adds HTTPS
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node serve.mjs
+Restart=always
+RestartSec=5
+
+# it needs to read its own folder and the keys in /home/kail, and to write nothing
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
