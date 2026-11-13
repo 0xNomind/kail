@@ -21,6 +21,17 @@ fn the_greeter() -> Option<AccountId> {
     env::storage_read(GREETER).and_then(|b| String::from_utf8(b).ok()).and_then(|s| s.parse().ok())
 }
 
+/// The public key the game's server signs its approvals of catches with (ed25519, 32 bytes), named by the owner.
+const SERVER_KEY: &[u8] = b"server_key";
+fn the_server_key() -> Option<[u8; 32]> {
+    env::storage_read(SERVER_KEY).and_then(|b| b.try_into().ok())
+}
+/// What the server signs to approve one catch: this contract, the player, the cast, what came up, and the
+/// mark of the player's sea after it. Signed for one cast of one player, it is of no use for anything else.
+pub fn approval_text(contract: &AccountId, player: &AccountId, cast: u64, what: &str, sea: &str) -> String {
+    format!("kail land|{contract}|{player}|{cast}|{what}|{sea}")
+}
+
 fn sea_key(player: &AccountId) -> Vec<u8> {
     format!("sea:{player}").into_bytes()
 }
@@ -61,8 +72,21 @@ impl Contract {
     /// `sea` is the server's mark for the player's sea as it is after this catch. The server checks a catch by
     /// playing the player's moves again in the sea that belongs to the mark kept here, so a sea from before an
     /// earlier catch (with that fish still in it) can never be used again.
-    pub fn land(&mut self, player: AccountId, cast: U64, what: String, secret: Base64VecU8, sea: Option<String>) -> Option<String> {
-        require!(env::predecessor_account_id() == self.minter, "Only the game's server can land a catch");
+    pub fn land(&mut self, player: Option<AccountId>, cast: U64, what: String, secret: Base64VecU8, sea: Option<String>, approval: Option<Base64VecU8>) -> Option<String> {
+        let caller = env::predecessor_account_id();
+        let player = if caller == self.minter {
+            // the server lands it for the player
+            player.unwrap_or_else(|| env::panic_str("Name the player"))
+        } else {
+            // the player lands it, and pays the network's fee for it: with the server's signature that this
+            // catch, of this cast, was really played
+            let refused = "Only the game's server can land a catch";
+            let key = the_server_key().unwrap_or_else(|| env::panic_str(refused));
+            let signature: [u8; 64] = approval.and_then(|a| a.0.try_into().ok()).unwrap_or_else(|| env::panic_str(refused));
+            let text = approval_text(&env::current_account_id(), &caller, cast.0, &what, sea.as_deref().unwrap_or(""));
+            require!(env::ed25519_verify(&signature, text.as_bytes(), &key), "The game's server did not approve this catch");
+            caller
+        };
         let mut p = self.profile(&player);
         require!(p.cast_at > 0 && p.casts == cast.0, "That cast is not in the water");
         require!(env::sha256(&secret.0) == p.seal, "That is not the secret of this cast");
@@ -117,6 +141,21 @@ impl Contract {
             Some(a) => { env::storage_write(GREETER, a.as_bytes()); }
             None => { env::storage_remove(GREETER); }
         }
+    }
+    /// The owner names the key the server signs its approvals of catches with (or none: then only the server's
+    /// own account can land a catch).
+    pub fn set_server_key(&mut self, key: Option<Base64VecU8>) {
+        require!(env::predecessor_account_id() == self.owner, "Only the owner can change the rules");
+        match key {
+            Some(k) => {
+                require!(k.0.len() == 32, "An ed25519 public key is 32 bytes");
+                env::storage_write(SERVER_KEY, &k.0);
+            }
+            None => { env::storage_remove(SERVER_KEY); }
+        }
+    }
+    pub fn server_key(&self) -> Option<Base64VecU8> {
+        the_server_key().map(|k| k.to_vec().into())
     }
     pub fn greeter(&self) -> Option<AccountId> {
         the_greeter()

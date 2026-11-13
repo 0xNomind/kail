@@ -9,12 +9,14 @@
 //      (~/.near-credentials/<network>/kail-server.<network>.json), paid by the welcome account;
 //   2. gives it a second key, for the server: that one may only call `land` and `settle_draw` on the contract.
 //      It has no spending limit of its own: the account holds nothing but fee money, and that is the limit;
-//   3. has the contract take the account as its server (`configure`, by the contract's owner, whose key is in
-//      the system keychain: the NEAR CLI signs with it);
+//   3. has the contract take the account as its server, and that key as the one the server signs its approvals
+//      of catches with (`configure` and `set_server_key`, by the contract's owner, whose key is in the system
+//      keychain: the NEAR CLI signs with it);
 //   4. writes NEAR_ACCOUNT and NEAR_KEY into server/.dev.vars;
 //   5. takes the old server key off the contract's account.
-// Afterwards: start the server again (and hand a hosted one its new key). The account pays about 0.0003 NEAR for
-// every catch landed, so it needs topping up now and then: on testnet from the faucet, to its name.
+// Afterwards: start the server again (and hand a hosted one its new key). A catch is sent to the contract by the
+// player who made it, with the server's approval, so the server's account pays only for holding the draws: about
+// 0.0005 NEAR each.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -154,6 +156,21 @@ else {
   console.log('   Done.');
 }
 
+// ---- 3b. the contract knows the key the server signs its approvals of catches with
+const approvesWith = serverKey ? Buffer.from(KeyPair.fromString(serverKey).getPublicKey().data).toString('base64') : null;
+const known = await view('server_key').catch(() => undefined);
+if (known === undefined) console.log('   (This contract has no place for the server\'s key yet: deploy the current one first, then run this again.)');
+else if (approvesWith && known === approvesWith) console.log('   The contract knows the key the server signs its approvals with.');
+else if (look) console.log(`   Would tell ${CONTRACT} which key the server signs its approvals of catches with.`);
+else if (approvesWith) {
+  console.log(`   Telling ${CONTRACT} which key the server signs its approvals of catches with…`);
+  const r = cli(['contract', 'call-function', 'as-transaction', CONTRACT, 'set_server_key', 'json-args', JSON.stringify({ key: approvesWith }), 'prepaid-gas', '30 Tgas', 'attached-deposit', '0 NEAR', 'sign-as', CONTRACT]);
+  let done = false;
+  for (let i = 0; i < 8 && !done; i++) { done = (await view('server_key').catch(() => null)) === approvesWith; if (!done) await sleep(1000); }
+  console.log(done ? '   Done.' : `   The contract did not take it: ${r.said}\n   Until it does, players cannot land their catches.`);
+  if (!done) process.exit(1);
+}
+
 // ---- 4. the server's settings
 if (was === ID && oldKey === serverKey) console.log('4. server/.dev.vars names the account and its key already.');
 else if (look) console.log(`4. Would write NEAR_ACCOUNT=${ID} and its key into server/.dev.vars (now: ${was || 'no account'}).`);
@@ -180,6 +197,6 @@ else {
 if (look) console.log('\nNothing was changed (--look).');
 else {
   const now = await held(ID);
-  console.log(`\nDone. ${ID} holds ${near(now ?? 0n)} NEAR: about ${Math.floor(Number((now ?? 0n) / (ONE / 1000n)) / 1000 / 0.0003)} catches' worth of fees.`);
-  console.log(`Start the server again. Top the account up now and then${network === 'testnet' ? ' (the testnet faucet, to its name)' : ''}; for a hosted server: deploy/push.sh … --keys, or npm run secrets.`);
+  console.log(`\nDone. ${ID} holds ${near(now ?? 0n)} NEAR: about ${Math.floor(Number((now ?? 0n) / (ONE / 1000n)) / 1000 / 0.0005)} draws' worth of fees.`);
+  console.log('Start the server again; for a hosted server: deploy/push.sh … --keys, or npm run secrets.');
 }

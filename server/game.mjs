@@ -151,14 +151,16 @@ async function keepSea(request, env) {
   return json({ ticket: await ticket(env, { ...says, seed: undefined, c: says.c + got.throws, n: says.n + ticks, reel: got.reel, top: Math.max(says.top, got.topReel), back: got.back, sea: writeSea(got.world) }) });
 }
 
-// A catch: the game hands in the moves since its ticket. Answers with what went into storage (for a chest:
-// what was inside; nothing when the storage was full) and a ticket for the sea as it is now.
+// A catch: the game hands in the moves since its ticket. The server plays them again, and when that throw
+// really brought the catch up it answers with its approval: a signature for exactly this catch of this cast
+// by this account, and a ticket for the sea as it is now. The player's own key then sends the catch to the
+// contract with that approval (and pays the network's fee for it); the contract checks the signature against the
+// key the owner named. The server sends no transaction for a catch.
 // `stale: true` tells the game that its sea is of no use any more and it has to ask for a new one.
 async function land(request, env) {
-  const now = Date.now(), { account, cast, secret, ticket: t, ticks, moves } = (await body(request)) || {};
+  const now = Date.now(), { account, cast, ticket: t, ticks, moves } = (await body(request)) || {};
   if (!goodAccount(account)) return json({ error: 'No such account' }, 400);
   if (!/^\d{1,20}$/.test(String(cast))) return json({ error: 'No such cast' }, 400);
-  if (typeof secret !== 'string' || secret.length > 200) return json({ error: 'The secret of the cast is missing' }, 400);
   const says = await readTicket(env, t);
   if (!says || says.a !== account) return json({ error: 'That is not a ticket for this sea', stale: true }, 409);
 
@@ -179,13 +181,16 @@ async function land(request, env) {
   if (late > 0) return json({ error: 'Too soon for that catch', retry_in_ms: late }, 425);
 
   const mark = b64(crypto.getRandomValues(new Uint8Array(12)));
-  let landed;
-  try { landed = await call(c, 'land', { player: account, cast: String(cast), what: got.caught.what, secret, sea: mark }); }
-  catch (e) { return json({ error: reason(e) }, 409); }
-  // the kind that went into storage, or null when the storage was full; and the transaction that put it there
-  return json({ landed, what: got.caught.what, tx: lastHash,
+  return json({ what: got.caught.what, cast: String(cast), sea: mark, approval: approve(env, account, cast, got.caught.what, mark),
     ticket: await ticket(env, { v: 1, a: account, c: Number(cast), r: mark, t0: says.t0, n: says.n + ticks, reel: got.reel, top: got.reel, back: got.back, sea: writeSea(got.world) }) });
 }
+// The server's word for one catch: its key's signature over the contract, the account, the cast, what came up
+// and the sea's new mark (the same text the contract puts together: approval_text in contract/src/game.rs).
+// For one cast of one account only; a second catch for the same cast finds that cast gone from the water.
+const serverPair = (env) => KeyPair.fromString(env.NEAR_KEY);
+const approve = (env, account, cast, what, mark) => b64(serverPair(env).sign(enc.encode(`kail land|${env.NEAR_CONTRACT}|${account}|${cast}|${what}|${mark}`)).signature);
+/// The public key those approvals are signed with, as the contract keeps it (base64 of its 32 bytes).
+export const approvalKey = (env) => b64(serverPair(env).getPublicKey().data);
 
 // Hold the draw of the days that are over and have tickets in them (the last three, in case a run was missed).
 export async function holdDraws(env) {
@@ -216,7 +221,7 @@ export default {
       if (url.pathname === '/api/land' && request.method === 'POST') return await land(request, env);
       if (url.pathname === '/api/sea' && request.method === 'POST') return await newSea(request, env);
       if (url.pathname === '/api/sea/keep' && request.method === 'POST') return await keepSea(request, env);
-      if (url.pathname === '/api/status') return json({ network: env.NEAR_NETWORK || 'testnet', contract: env.NEAR_CONTRACT, account: env.NEAR_ACCOUNT, near: await purse(env) });
+      if (url.pathname === '/api/status') return json({ network: env.NEAR_NETWORK || 'testnet', contract: env.NEAR_CONTRACT, account: env.NEAR_ACCOUNT, near: await purse(env), approves_with: approvalKey(env) });
       return json({ error: 'Not found' }, 404);
     } catch (e) {
       return json({ error: reason(e) }, 502);

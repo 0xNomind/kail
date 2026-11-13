@@ -296,8 +296,10 @@ document.getElementById('btnRelease').addEventListener('click', (e) => {
 });
 function drop() { if (release(world)) moves.did(tick, 'r'); }
 
-// Hand in the moves up to this catch. The server plays them again and answers with what went into storage (for
-// a chest: what was inside), or with nothing when the storage was full; and with a ticket for the sea as it is now.
+// Hand in the moves up to this catch. The server plays them again and answers with its approval of the catch
+// and a ticket for the sea as it is now. The game's own key then sends the catch to the contract with that
+// approval; the contract answers with what went into storage (for a chest: what was inside), or with nothing
+// when the storage was full.
 // In the practice sea a throw costs one of ten bait that fill up again by themselves, and a catch goes into a
 // storage that only this page knows (a chest holds one of its three finds, each as likely as the others).
 function practiceCast() {
@@ -320,13 +322,18 @@ async function land(thrown, endTick, ev) {
     const castNumber = await thrown.number;
     if (keeping) await keeping;
     for (let tries = 0; tries < 6; tries++) {
-      const r = await post('api/land', { account: me, cast: castNumber, secret: thrown.secret, ticket: base.ticket, ticks: endTick - base.tick, moves: moves.cut(base.tick, endTick) });
+      const r = await post('api/land', { account: me, cast: castNumber, ticket: base.ticket, ticks: endTick - base.tick, moves: moves.cut(base.tick, endTick) });
       const answer = await r.json().catch(() => ({}));
       if (r.status === 425 && answer.retry_in_ms) { await wait(answer.retry_in_ms + 200); continue; }
       if (!r.ok) { if (answer.stale) stale = true; throw new Error(answer.error || 'The game server did not answer'); }
+      // the catch itself goes to the chain from here, with the server's approval of it. Should that not arrive,
+      // the sea here and the chain are out of step, and the sea is started anew.
+      let landed;
+      try { landed = await send('land', { cast: castNumber, what: answer.what, secret: thrown.secret, sea: answer.sea, approval: answer.approval }); }
+      catch (e) { stale = true; if (outOfNear(e)) nearFirst(); throw new Error(`The catch did not reach the chain: ${reason(e)}`); }
       base = { ticket: answer.ticket, tick: endTick };
       moves.forget(endTick);
-      return answer.landed;
+      return landed;
     }
     throw new Error('The game server kept saying it was too soon');
   } finally { landings -= 1; }

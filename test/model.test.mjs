@@ -103,8 +103,8 @@ ok('every call costs its sender the network\'s fee, and the books still close', 
   c.call('a', 'top_up', price * 10n);
   assert.equal(before - c.wallet('a'), price * 10n + 4n * NEAR / 10000n);     // 4.0 Tgas at 0.0001 NEAR a Tgas
   c.call('a', 'buy_bait', 1); c.call('a', 'cast'); c.call('a', 'land', 'anchovy');
-  assert.equal(c.money().fees, (40n + 29n + 28n) * NEAR / 100000n);         // the player paid for three calls
-  assert.equal(c.money().serverFees, 28n * NEAR / 100000n);                  // the server for landing the catch
+  assert.equal(c.money().fees, (40n + 29n + 28n + 31n) * NEAR / 100000n);   // the player paid for four calls, their own catch among them
+  assert.equal(c.money().serverFees, 0n);                                    // the server sends nothing for a catch
   refused(() => c.call('nobody', 'cast'), /Not enough NEAR/);                // no NEAR, no transaction
   assert.deepEqual(c.audit(), []);
 });
@@ -122,7 +122,8 @@ ok('the boats do what the game is about', () => {
 ok('all the NEAR of a week is accounted for, fees and all', () => {
   const m = week.money, add = (list) => Math.round(list.reduce((a, [, v]) => a + v, 0) * 1e6) / 1e6;
   assert.equal(m.total, m.totalNow); assert.equal(add(m.cameIn), m.total); assert.equal(add(m.isNow), m.totalNow);
-  assert.ok(m.isNow.find(([k]) => /fees by the players/.test(k))[1] > 0.1, 'the players paid fees'); assert.ok(m.isNow.find(([k]) => /fees by the makers/.test(k))[1] > 0.05, 'the server paid fees'); assert.equal(m.cameIn[2][1], m.isNow[6][1]);
+  assert.ok(m.isNow.find(([k]) => /fees by the players/.test(k))[1] > 0.1, 'the players paid fees'); const ours = m.isNow.find(([k]) => /fees by the makers/.test(k))[1];
+  assert.ok(ours > 0.001 && ours < 0.02, 'the game\'s own accounts pay only for draws and welcomes, not for catches'); assert.equal(m.cameIn[2][1], m.isNow[6][1]);
 });
 ok('a week with other settings: more players, more joining every day, a bigger vault', () => {
   const big = playWeek({ days: 4, seed: 5, vault: 30, players: 23, joining: 4, wallet: 5 });

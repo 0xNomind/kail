@@ -5,10 +5,11 @@
 NEAR_NETWORK=testnet
 NEAR_CONTRACT=kail-game.testnet
 
-# The account and key the server signs with: it lands catches and holds the draws, and pays the network's fee
-# for each. An account of its own, not the contract's: the contract's account holds the prize vault.
-# `npm run server-account` makes it, names it to the contract and writes these two lines. The key may only call
-# `land` and `settle_draw` on the contract; never a full-access key.
+# The account and key the server signs with. With the key it signs its approval of every catch it has checked
+# (the player's own transaction carries that to the contract, and the player pays its fee), and it holds the
+# draws, which is all it pays for. An account of its own, not the contract's: the contract's account holds the
+# prize vault. `npm run server-account` makes it, names it and its key to the contract and writes these two
+# lines. The key may only call `land` and `settle_draw` on the contract; never a full-access key.
 NEAR_ACCOUNT=kail-server.testnet
 NEAR_KEY=ed25519:...
 

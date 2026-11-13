@@ -122,12 +122,25 @@ await check('The boats trade on the same markets as players', async () => {
   return `${items.length} of ${S.orders.length} fish orders and ${tickets.length} of ${S.ticket_orders.length} ticket orders are theirs; ${sales} of the last ${(S.ticket_trades || []).length} ticket sales involved a boat. ${one}`;
 });
 
+await check('A player lands their own catch and pays its fee; the contract takes it only with the server\'s signature', async () => {
+  const key = await view('server_key');
+  if (!key || Buffer.from(key, 'base64').length !== 32) return { fail: 'the contract has no server key named: only the server\'s own account could land a catch' };
+  const minter = await view('minter');
+  // the last catches on the chain: who sent them? (from a public explorer; left out when it does not answer)
+  let seen = '';
+  try {
+    const list = (await (await fetch(`https://api${NETWORK === 'mainnet' ? '' : '-testnet'}.nearblocks.io/v3/accounts/${CONTRACT}/txns?limit=100`, { signal: AbortSignal.timeout(10_000) })).json()).data || [];
+    const lands = list.filter((t) => t.actions?.[0]?.method === 'land'), own = lands.filter((t) => t.signer_account_id !== minter);
+    if (lands.length) seen = ` Of the last ${lands.length} catches on the chain, ${own.length} were sent by the player's own account${own[0] ? `, e.g. ${own[0].signer_account_id} in ${own[0].transaction_hash}` : ''}.`;
+  } catch { /* the explorer did not answer: the claim stands on the key and the contract's tests */ }
+  return `the contract checks a catch against the server's key ${key.slice(0, 12)}… (contract/src/game.rs, land; refusals in npm run test:contract).${seen}`;
+});
 await check('The server signs as an account of its own: the account with the prize vault pays no fees', async () => {
   const minter = await view('minter');
   if (minter === CONTRACT) return { fail: `the contract's server is the contract's own account (${CONTRACT}): its fees come out of the account that holds the vault (npm run server-account)` };
   const j = await rpc('query', { request_type: 'view_account', finality: 'final', account_id: minter });
   if (j.result?.amount == null) return { fail: `the contract names ${minter} as its server, and there is no such account` };
-  return `only ${minter} may land a catch; it holds ${Number(BigInt(j.result.amount) / 10n ** 21n) / 1000} NEAR for fees`;
+  return `the contract's server is ${minter}; it holds ${Number(BigInt(j.result.amount) / 10n ** 21n) / 1000} NEAR for the fees of holding draws`;
 });
 
 // ---- a running game server, if one is named
@@ -140,7 +153,10 @@ await check('The game server is up and plays on this contract', async () => {
   if (a.status === 503) return { skip: `${server} runs without a server key (the pages work, catches cannot be landed there)` };
   if (a.status !== 200 || a.body?.contract !== CONTRACT) return { fail: `${a.status} ${JSON.stringify(a.body).slice(0, 120)}` };
   const minter = await view('minter');
-  if (a.body.account !== minter) return { fail: `that server signs as ${a.body.account}, but the contract lets only ${minter} land a catch` };
+  if (a.body.account !== minter) return { fail: `that server signs as ${a.body.account}, but the contract's server is ${minter}` };
+  // a catch reaches the contract with the server's approval: the contract must know the key that server signs with
+  const known = await view('server_key');
+  if (a.body.approves_with !== known) return { fail: `that server signs its approvals of catches with a key the contract does not know (${String(a.body.approves_with).slice(0, 12)}… against ${String(known).slice(0, 12)}…): players could not land a catch` };
   if (a.body.near != null && a.body.near < 0.5) return { fail: `the server's account ${a.body.account} is down to ${a.body.near} NEAR: catches will stop being landed` };
   return `${server}/api/status: ${JSON.stringify(a.body)}`;
 });

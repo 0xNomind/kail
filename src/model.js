@@ -32,9 +32,12 @@ export const MAX_WINNERS = 100, DRAW_CAP = 500, PLAYER_CAP = 10, ONE_IN = 5;
 export const FEES = { cast: 2.8, buy_bait: 2.9, throw_back: 2.6, upgrade: 2.9, hand_in: 4.7, top_up: 4.0, list_item: 2.7, want_item: 3.0, cancel_item_order: 3.5, buy_item: 5.5, sell_item: 4.7,
   enter_draw: 3.2, claim: 3.2, sell_tickets: 2.9, buy_tickets: 4.1, add_prize: 3.0,
   bid_tickets: 3.0 /* like want_item */, fill_bid: 4.1 /* like buy_tickets */, cancel_order: 3.5 /* like cancel_item_order */,
-  // these three are sent, and paid for, by the game's server, not by the player
-  land: 2.8, settle_draw: 4.6, welcome: 3.0 /* like bid_tickets */ };
-const BY_SERVER = new Set(['land', 'settle_draw', 'welcome']);
+  // a catch is sent to the contract by the player who made it, with the server's approval of it (3.1 Tgas, with
+  // the check of the server's signature in it): the one who fishes pays for their own catch
+  land: 3.1,
+  // these two are sent, and paid for, by the game's own accounts, not by the player
+  settle_draw: 4.6, welcome: 3.0 /* like bid_tickets */ };
+const BY_SERVER = new Set(['settle_draw', 'welcome']);
 export const SERVER = 'server';
 const networkFee = (method) => BigInt(Math.round((FEES[method] || 3) * 10)) * 10n ** 19n;
 const feeOf = (total) => Math.ceil((total * FEE_PERCENT) / 100), feeOfNear = (total) => (total * BigInt(FEE_PERCENT) + 99n) / 100n;

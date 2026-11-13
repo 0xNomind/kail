@@ -26,7 +26,7 @@ export const shortName = (id, max = 22) => (id.length <= max ? id : `${id.slice(
 // The contract the game plays on, and what the game's own key may call there without asking the wallet:
 // everything that attaches no NEAR. (Topping up, buying tickets and sending a ticket do go through the wallet.)
 export const CONTRACT = NET.contract;
-export const GAME_CALLS = ['buy_bait', 'cast', 'upgrade', 'throw_back', 'hand_in', 'list_item', 'want_item', 'cancel_item_order', 'buy_item', 'sell_item',
+export const GAME_CALLS = ['buy_bait', 'cast', 'land', 'upgrade', 'throw_back', 'hand_in', 'list_item', 'want_item', 'cancel_item_order', 'buy_item', 'sell_item',
   'enter_draw', 'claim', 'sell_tickets', 'cancel_order', 'fill_bid'];
 
 // The connector is only loaded when a page needs the wallet. With it comes the plugin that signs with the game's
@@ -55,11 +55,23 @@ export function gameKey(id = account()) { try { return JSON.parse(localStorage.g
 export function hasGameKey(id = account()) {
   try { return !!id && !!localStorage.getItem(keySlot(id)); } catch { return false; }
 }
-async function keyOnChain(id, publicKey) {
+// What the chain says about a key of an account: nothing when the account has no such key.
+async function keyAsOnChain(id, publicKey) {
   const r = await fetch(NODES[0], { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'query', params: { request_type: 'view_access_key', finality: 'optimistic', account_id: id, public_key: publicKey } }) });
   const j = await r.json();
-  return !j.error && !j.result?.error;
+  return !j.error && !j.result?.error ? j.result : null;
+}
+const keyOnChain = async (id, publicKey) => !!(await keyAsOnChain(id, publicKey));
+// A key is good for the game when it may make every one of the game's calls (a key from before a call was added
+// may not), and when it has something left of what it may spend on fees.
+const LEAST_LEFT = 5_000_000_000_000_000_000_000n;      // 0.005 NEAR: a handful of calls
+function goodForTheGame(key) {
+  const may = key?.permission?.FunctionCall;
+  if (!may) return key?.permission === 'FullAccess';
+  if (may.receiver_id !== CONTRACT) return false;
+  if (may.method_names.length && !GAME_CALLS.every((c) => may.method_names.includes(c))) return false;
+  return may.allowance == null || BigInt(may.allowance) >= LEAST_LEFT;
 }
 /// Is the game's key in this browser AND known to the account on the chain? (A key the chain does not know is
 /// thrown away here, so the game asks for a new one.)
@@ -68,7 +80,9 @@ export async function gameKeyWorks(id = account()) {
   try {
     const { KeyPair } = await import('../public/vendor/near.js');
     const stored = JSON.parse(localStorage.getItem(keySlot(id)));
-    if (await keyOnChain(id, KeyPair.fromString(stored.privateKey).getPublicKey().toString())) return true;
+    // (a key the chain does not know, one that may not make all of the game's calls, or one that has spent what
+    // it may: thrown away here, so the game asks for a new one)
+    if (goodForTheGame(await keyAsOnChain(id, KeyPair.fromString(stored.privateKey).getPublicKey().toString()))) return true;
     localStorage.removeItem(keySlot(id));
     return false;
   } catch { return true; }        // could not ask the chain right now: do not throw a good key away

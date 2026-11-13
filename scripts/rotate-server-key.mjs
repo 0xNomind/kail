@@ -76,6 +76,15 @@ if (!there) { console.log(`   It was not added: ${added.said}\n   Nothing was ch
 fs.writeFileSync(file, lines.map((l) => (l.startsWith('NEAR_KEY=') ? `NEAR_KEY=${pair.toString()}` : l)).join('\n'));
 console.log('2. server/.dev.vars has the new key.');
 
+// 2b. the contract takes the new key as the one the server signs its approvals of catches with (its owner's
+// key is in the system keychain). Until it does, players cannot land their catches.
+{
+  const approvesWith = Buffer.from(pair.getPublicKey().data).toString('base64');
+  console.log(`   Telling ${contract} which key the server signs its approvals with…`);
+  const told = cli(['contract', 'call-function', 'as-transaction', contract, 'set_server_key', 'json-args', JSON.stringify({ key: approvesWith }), 'prepaid-gas', '30 Tgas', 'attached-deposit', '0 NEAR', 'sign-as', contract]);
+  if (!told.ok) console.log(`   THE CONTRACT DID NOT TAKE IT: ${told.said}\n   By hand: near contract call-function as-transaction ${contract} set_server_key json-args '{"key":"${approvesWith}"}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as ${contract} network-config ${network} sign-with-keychain send`);
+}
+
 // 3. the old key goes
 if (!had) console.log('3. The old key was not on the account: nothing to delete.');
 else {

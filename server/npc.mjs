@@ -48,7 +48,7 @@ async function rpc(urls, method, params) {
 const view = async (urls, contract, method, args) => JSON.parse(Buffer.from((await rpc(urls, 'query', { request_type: 'call_function', finality: 'optimistic', account_id: contract, method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString('base64') })).result).toString());
 const walletNear = async (urls, id) => Number(BigInt((await rpc(urls, 'query', { request_type: 'view_account', finality: 'optimistic', account_id: id })).amount) / 10n ** 18n) / 1e6;
 
-const spent = { last: 0 };
+export const spent = { last: 0 };      // gas the last call by a boat used, in Tgas
 // ---- signing as a fisher: with its key file, or through the NEAR CLI when the key sits in the system keychain
 function signer(id, env, urls) {
   const network = env.NEAR_NETWORK || 'testnet';
@@ -134,11 +134,15 @@ async function throwOnce(n, want, api) {
   }
   if (!caught) return { said: 'the hook came back empty' };
   for (let i = 0; i < 6; i++) {
-    const a = await api('/api/land', { account: n.account, cast: thrown.number, secret: thrown.secret, ticket: s.base.ticket, ticks: caught.end - s.base.tick, moves: moves.cut(s.base.tick, caught.end) });
+    const a = await api('/api/land', { account: n.account, cast: thrown.number, ticket: s.base.ticket, ticks: caught.end - s.base.tick, moves: moves.cut(s.base.tick, caught.end) });
     if (a.status === 425 && a.retry_in_ms) { await sleep(a.retry_in_ms + 200); continue; }
     if (a.status !== 200) { if (a.stale) n.sea = null; return { said: `the catch was not accepted: ${a.error}` }; }
+    // the boat sends its own catch to the contract, with the server's approval of it, as a player's game does
+    let landed;
+    try { landed = await n.call('land', { cast: thrown.number, what: a.what, secret: thrown.secret, sea: a.sea, approval: a.approval }); }
+    catch (e) { n.sea = null; return { said: `the catch did not reach the chain: ${short(e)}` }; }
     s.base = { ticket: a.ticket, tick: caught.end }; moves.forget(caught.end);
-    return { landed: a.landed, what: caught.what, said: a.landed ? `brought up ${caught.what === 'chest' ? `a chest: ${a.landed}` : `a ${a.landed}`}` : `brought up a ${caught.what}, but the storage was full` };
+    return { landed, what: caught.what, said: landed ? `brought up ${caught.what === 'chest' ? `a chest: ${landed}` : `a ${landed}`}` : `brought up a ${caught.what}, but the storage was full` };
   }
   return { said: 'the game server kept saying it was too soon' };
 }

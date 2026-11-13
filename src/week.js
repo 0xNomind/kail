@@ -5,7 +5,7 @@
 // costs, tickets made and drawn, what fish go for, who gets richer.
 //
 // What is the same as on the chain: every rule of the contract (the model refuses what the contract refuses), the
-// network's fee for every call (measured on testnet), the sea and the hook (the same code, in the same steps of
+// network's fee for every call (measured on testnet; a player pays for their own cast and their own catch), the sea and the hook (the same code, in the same steps of
 // 1/240 s as the live game, the robot looking 60 times a second as it does there), the fishers' thinking, and how
 // long they pause between steps.
 // What is not: the players are the ten characters over and over, not people; chance (which fish swim by, what a
