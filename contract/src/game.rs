@@ -5,8 +5,8 @@ use near_sdk::{AccountId, Gas, NearToken, Promise, PromiseOrValue, env, near, re
 
 use crate::{BAIT, CHEST, COIN, Contract, ContractExt, is_fish};
 
-/// How many fish and chest finds fit, by storage level. The first one holds the biggest daily quest (14
-/// things) with a little to spare.
+/// How many fish and chest finds fit, by storage level. The first one holds the biggest daily quest (9
+/// things) with room to spare.
 const STORAGE_CAP: [u32; 5] = [16, 24, 36, 50, 70];
 /// What the next level costs, in coins.
 const STORAGE_COST: [u128; 4] = [30, 70, 150, 300];

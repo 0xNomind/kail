@@ -51,15 +51,15 @@ export const UPGRADES = {
 };
 
 // Money. Coins exist only because somebody topped up with NEAR; nothing in the game hands out coins for free.
-// (On-chain comes later. For now a top-up is simulated and marked as a demo in the game.)
+// (On the chain a top-up is priced by the contract, from the day's prize. These numbers are the practice sea's.)
 export const MONEY = { coinsPerNear: 100, packs: [1, 5, 10] };
 // Two kinds of money, kept apart. Coins live inside the game: bait, upgrades, trading fish. NEAR lives outside it,
 // at the Harbour: topping up coins, trading tickets, and the prizes of the draw.
-// Until this is on chain every account starts with some pretend NEAR to try things with.
+// In the practice sea and the tests an account starts with some pretend NEAR to try things with.
 export const WALLET = { demoNear: 10 };
 // The ticket market, for NEAR. It works like a market for NFTs: every ticket has its own number; players list
 // tickets at a price, others buy them; players also post offers ("I pay this much for a ticket") that holders can
-// sell into. Other players are simulated for now, on chain later. Prices are shares of what a ticket is worth in
+// sell into. On the chain the other side is players and the computer's boats. Prices are shares of what a ticket is worth in
 // today's draw (its chance of winning times the prize).
 export const TICKETS = {
   fee: 0.05,                    // share of every sale that goes to the prize vault, taken from the seller
@@ -121,8 +121,7 @@ export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 // served). It can be done again while tickets are left. Tickets are the only way into the draw.
 // "effort" is how many throws an average player needs for one of each thing (measured, see test/effort.mjs).
 // The chest item comes first (one of the three, each as likely as the others); what is left of the "budget" of
-// throws is split between the two fish by "fishShare". An Old crown is far rarer than the other two, so on a crown
-// day the quest is twice as big and pays two tickets: a ticket costs about the same bait on any day.
+// throws is split between the two fish by "fishShare", so a ticket costs about the same bait on any day.
 export const QUEST = {
   budget: 24,
   fishShare: [0.53, 0.47],
@@ -138,7 +137,7 @@ export const QUEST = {
 export const DRAW = { winners: 100, prize: [120, 200], othersTickets: [300, 500] };
 
 // The market between players inside the game, for coins: fish and chest items only (tickets trade at the Harbour).
-// Other players are simulated for now: they put things up for sale,
+// In the practice sea and the tests the other players are made up: they put things up for sale,
 // they want to buy some, and they buy what the player puts up if the price is fair.
 // A thing the day's quest asks for is worth more that day ("wantedToday"). Nobody knows tomorrow's quest.
 export const MARKET = {

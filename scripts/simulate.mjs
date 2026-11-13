@@ -18,7 +18,9 @@ const args = process.argv.slice(2), opt = (name, fallback) => (args.includes(`--
 const days = Number(opt('days', 7)), seed = Number(opt('seed', 1)), vault = Number(opt('vault', 4)), players = Number(opt('players', 10)), joining = Number(opt('join', 0)), wallet = Number(opt('wallet', 10));
 const started = Date.now(), week = playWeek({ days, seed, vault, players, joining, wallet }), took = Date.now() - started;
 const print = createHash('sha256').update(JSON.stringify(week)).digest('hex').slice(0, 12);
-if (args.includes('--json')) { console.log(JSON.stringify({ ...week, fingerprint: print }, null, 1)); process.exit(week.problems.length ? 1 : 0); }
+// (written out in full before leaving: a program reading this through a pipe gets all of it)
+const leave = async (text) => { await new Promise((ok) => process.stdout.write(text, ok)); process.exit(week.problems.length ? 1 : 0); };
+if (args.includes('--json')) await leave(`${JSON.stringify({ ...week, fingerprint: print }, null, 1)}\n`);
 
 const pad = (v, n) => String(v ?? '-').padStart(n), row = (cells, widths) => cells.map((c, i) => (i ? pad(c, widths[i]) : String(c).padEnd(widths[i]))).join('  ');
 console.log(`Kail, ${days} days played in ${(took / 1000).toFixed(1)} s (a model of the contract, not the chain)`);
@@ -59,5 +61,4 @@ const steps = {}; for (const d of week.days) for (const [k, n] of Object.entries
 console.log(`\nSteps taken in the week: ${Object.entries(steps).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ')}`);
 console.log(`Steps the model refused (as the contract would have): ${week.days.reduce((a, d) => a + d.refused, 0)}`);
 console.log(week.problems.length ? `\nTHE BOOKS DID NOT CLOSE:\n  ${week.problems.join('\n  ')}` : `\nThe books closed after every day: no NEAR, coin, ticket or fish appeared or vanished without a rule for it.`);
-console.log(`Fingerprint of this week: ${print} (the same options give the same one)`);
-process.exit(week.problems.length ? 1 : 0);
+await leave(`Fingerprint of this week: ${print} (the same options give the same one)\n`);

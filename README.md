@@ -25,11 +25,17 @@ npm start         # the pages, at http://localhost:3000; /play is a practice sea
 ```
 
 `npm run verify` changes nothing and needs no account. It prints each claim with what it found on the chain
-(the contract and its NEP-245 methods, the draw's limits, the coin price worked out from the prize, earlier draws
+(the contract and its NEP-245 methods, the tokens' names, the draw's limits, the coin price worked out from the prize, earlier draws
 with the transaction that held each, the ten boats with their balances and casts, their orders on the markets)
-and ends with a line like `9 held, 0 did not, 5 skipped`. The five skipped ones are about a running game server:
-`npm run verify -- --server <address>` checks those too, against the hosted game or against
-`http://localhost:3000` on a machine that has the server's key. `--json` gives the same as JSON.
+and ends with a line like `14 held, 0 did not, 5 skipped` (the first number grows when checks are added;
+`0 did not` is the result, and the exit code is 0). The five skipped ones are about a running game server:
+`npm run verify -- --server https://kail.nomind.dev` checks those too, against the hosted game (19 held, none
+skipped). Against a local `npm start` that has no server key, four stay skipped. `--json` gives the same as
+JSON; with `npm run`, add `--silent` so that npm's own two lines stay out of it
+(`npm run verify --silent -- --json`, `npm run simulate --silent -- --json`).
+
+`npm start` stays in the foreground and prints `Kail is at http://localhost:3000` when it is ready.
+`PORT=3111 npm start` uses another port.
 
 `npm run simulate` plays seven days of the game at once: players the computer plays, with the rules they play
 by on the chain, fishing in the real sea in its real steps, against a model of the contract's rules written in
@@ -55,14 +61,28 @@ Where each claim lives, and how to check it:
 | The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
 | The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
-| Sign-in with Google, Apple or email | `src/nearauth.js`, `server/relay.mjs` | by hand, at `http://localhost:3000` (see "Signing in") |
+| Sign-in with Google, Apple or email | `src/nearauth.js`, `server/relay.mjs` | cannot be tried by a reviewer; "Signing in" says why and links what it did on the chain |
 
 The game itself can be seen and played without signing in: `http://localhost:3000/play` is then a practice sea
 (the same sea, hook and pull, played in the browser only; nothing is saved or sent). What cannot be checked
 without a signed-in player is what touches the chain: a real cast, a top-up, entering a draw. Those are the steps
 under "Try it". A local `npm start` without the server's key shows the pages with live
 contract data, but cannot land a catch; `KAIL_SERVER=<the hosted address> npm start` uses the hosted server
-instead. `npm run test:contract` needs Rust and compiles for several minutes the first time.
+instead. `npm run test:contract` needs Rust (rustup fetches the pinned toolchain, 1.95.0 with the wasm target)
+and compiles for several minutes the first time.
+
+## The loop
+
+- **Every half minute, a throw.** The hook swings under the boat. The player picks the moment to cast, steers
+  the sinking hook past the fish they do not want onto the one they do, then holds and lets go to keep it in the
+  box while it comes up. What is on the hook, and whether it stays on, is not known until it is up: a fish, a
+  chest with one of three finds, junk, or nothing. A throw costs one bait.
+- **Every five minutes, a choice.** The day's quest asks for some of an upper fish, some of a deep fish and one
+  chest find. Fish for what is missing, or buy it on the market from another player or a boat? Sell the spare
+  catch, and at what price? Buy more bait, a faster reel, a bigger storage?
+- **Every session, a ticket.** A finished quest pays a ticket. Put it into the day's draw (one ticket in five
+  wins a hundredth of the day's prize, in NEAR) or sell it to another player for NEAR. The next day there is a
+  new quest, the last draw's winners are listed, and what was won can be collected.
 
 ## The problem it deals with
 
@@ -81,8 +101,9 @@ A game that pays out real tokens has three weak spots, and this project is an at
    (44 coins, measured with the game's robots; an average player spends about 48, a slow one 68) costs what a
    ticket wins on average. So the vault does not drain to good players, and it grows from everybody else.
 3. **A chain the player has to think about.** After one approval the game signs its own small actions (casting,
-   buying bait, trading fish) with a key that can do nothing else, so playing opens no wallet. Signing in also
-   works with Google, Apple or email (NEAR Auth), with no wallet at all.
+   buying bait, trading fish) with a key that can do nothing else, so playing opens no wallet. Signing in with
+   Google, Apple or email (NEAR Auth), with no wallet at all, is built and has been used on the chain, but is not
+   open on the hosted address yet (see "Signing in").
 
 ## Try it
 
@@ -97,8 +118,8 @@ npm start
 ```
 
 Then open `http://localhost:3000`. To use the hosted game's server from your machine (no keys needed), start it
-with `KAIL_SERVER=<the hosted address> npm start`. Signing in with Google or email works at exactly
-`http://localhost:3000`, because NEAR Auth's shared test sign-in only accepts that address.
+with `KAIL_SERVER=https://kail.nomind.dev npm start`. Signing in with Google or email cannot be tried from a
+fresh copy or on the hosted address: see "Signing in".
 
 Steps a judge can follow:
 
@@ -106,7 +127,7 @@ Steps a judge can follow:
 | --- | --- |
 | Open the front page | Today's quest, the prize and the tickets in today's draw, read live from the contract `kail-game.testnet` |
 | Press **Play now** without signing in | The practice sea: press **CAST**, steer the hook onto a fish, hold to pull it up. Bait is free there and nothing is saved |
-| Press **Sign in**, choose **NEAR wallet** (Meteor on testnet) or **NEAR Auth** (Google, Apple, email) | You land in the game. A new account gets 5 bait once. With too little NEAR the game says so first, with your account's name and the testnet faucet |
+| Press **Sign in**, choose **NEAR wallet** (Meteor on testnet; **NEAR Auth** is shown there as not available at this address yet) | You land in the game. A new account gets 5 bait once. With too little NEAR the game says so first, with your account's name and the testnet faucet |
 | Press **Approve once** | One approval adds the game's key. From here casting and trading open no window |
 | Press **CAST**, steer the hook onto a fish, hold to pull it up while keeping it in the box | The fish is in Storage after a few seconds. It is a token: look your account up on `https://testnet.nearblocks.io` |
 | Open **Board → Market** | Orders by players and by the computer's boats, cheapest first. Open one: it says who it is from. Where the boats run (a local `npm start` with the boats' keys) it also says why the boat asks that price |
@@ -148,6 +169,26 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
   (about 0.0003 NEAR), and one transaction carrying several calls (buying from several sellers at once, or a
   fee together with a top-up).
 
+## What runs by itself, and what needs the makers
+
+- **By itself, in the contract:** the day's quest (worked out from the day's number), the day's prize (a fifth of
+  the vault), the price of a coin (from the prize), both markets, the limits of the draw, entering it, and
+  collecting what was won. No call of the makers sets a quest or a price.
+- **Needs the game's server:** a catch counts only with the server's signature, so while the server is down
+  nobody lands a fish. The markets, top-ups, entering the draw and collecting still work then, straight on the
+  contract. A finished day's draw is held by the server's account (or the owner); while it is down the day
+  waits, and is held, oldest first, when it is back. The welcome bait and the boats also come from the server's
+  machine.
+- **What the owner can change** (the owner is the contract's own account): the length of a day, the prize's
+  share of the vault, how many tickets the quest hands out a day, the coins a ticket is priced at, and which
+  account and key the server signs with (`configure`, `set_server_key`, `set_greeter`). No method lets the owner
+  take tokens or NEAR from a player or from the vault. The account's full-access key is another matter: see
+  "Limits".
+- **What the boats' prices follow:** the quest of the day decides what a boat needs and what it has spare. Its
+  price for a fish is the throws that fish takes, times what bait costs, times the boat's own factor, and comes
+  down while the order stays unsold (to 60% at the lowest). So prices follow the price of a coin, which follows
+  the vault; they do not follow how much of a fish is on the market.
+
 ## The computer's boats
 
 `src/npc-rules.js` holds ten fishers and the one function that decides a boat's next step from the
@@ -162,7 +203,7 @@ its catch checked by the game's server like a player's. Their accounts:
 `kail-ruby.testnet` `kail-silas.testnet` `kail-wren.testnet` `kail-jack.testnet` `kail-dolly.testnet`
 
 They are not driven by a language model: the rules are plain code that can be read and tested
-(`test/npc.test.mjs`: 47 situations and 20,000 made-up states).
+(`test/npc.test.mjs`: 51 situations and 20,000 made-up states).
 
 ## Signing in
 
@@ -172,6 +213,18 @@ They are not driven by a language model: the rules are plain code that can be re
   (`kail-welcome.testnet`, `server/relay.mjs`) makes the player a named account and carries each approval to
   NEAR Auth's contract. An approval on the game's contract carries 0.005 NEAR that pays the helper back
   (`relay_fee`); the server refuses to carry one that does not.
+- **Where NEAR Auth works, and why not on the hosted address.** On testnet every app uses one sign-in client
+  that NEAR Auth shares (docs.auth.near.org/resources/testnet). A sign-in client has a list, kept by NEAR Auth,
+  of the addresses it may send a signed-in person back to. For the shared one that list is
+  `http://localhost:3000` (where NEAR Auth's own example app runs) and NEAR Auth's own demo,
+  `https://example.fast-auth.com`. Every other address is refused with "Callback URL mismatch", this game's
+  hosted one too; `npm run verify` asks NEAR Auth's sign-in server and prints its answers. So NEAR Auth signs
+  players in where the game runs at exactly `http://localhost:3000` on a machine that has the helper account's
+  key, and nowhere else until NEAR Auth adds the hosted address to its list. A reviewer's fresh copy has no
+  such key, and the hosted game shows the button as not available. What it did on the chain can be read: the
+  helper carried a player's approvals to NEAR Auth's contract `fast-auth.testnet`
+  ([B3Ryij…](https://testnet.nearblocks.io/txns/B3RyijTgpmZSH8H3vDsToNpNWkravahdjNoj5X3C7EAJ),
+  [7dVuZE…](https://testnet.nearblocks.io/txns/7dVuZEQQmnFRw4sDZHcpbTrs2aK1kHPVeKLvW41kCbBX)).
 
 ## How it is put together
 
@@ -193,7 +246,7 @@ They are not driven by a language model: the rules are plain code that can be re
 | `public/vendor/` | The wallet and NEAR Auth libraries, packed into browser files (`npm run vendor`, `npm run vendor:auth`) |
 | `art/` | The pixel art and the site's icons, drawn by code (`npm run art`) |
 | `public/music/` | The one piece of music, generated with a music model (see the note in that folder). There are no other sounds |
-| `test/` | Tests of the sea, the replay and the boats' rules. `test/model/` is the economy as it was modelled before the contract existed; the game does not use it |
+| `test/` | Tests of the sea, the replay, the boats' rules and the model of the contract. `test/model/` is the economy as it was modelled before the contract existed; the game does not use it |
 
 ## Tests
 
@@ -213,18 +266,6 @@ boats' accounts (`npm run npcs`) are made by those scripts. `npm start` then run
 helper and the boats. The server's account pays for holding the draws, about 0.0005 NEAR each, and the vault
 pays it back with every draw (should the account still fall under half a NEAR, the server says so in its log and
 `npm run verify -- --server` fails).
-- **Where NEAR Auth works, and why not on the hosted address.** On testnet every app uses one sign-in client
-  that NEAR Auth shares (docs.auth.near.org/resources/testnet). A sign-in client has a list, kept by NEAR Auth,
-  of the addresses it may send a signed-in person back to. For the shared one that list is
-  `http://localhost:3000` (where NEAR Auth's own example app runs) and NEAR Auth's own demo,
-  `https://example.fast-auth.com`. Every other address is refused with "Callback URL mismatch", this game's
-  hosted one too; `npm run verify` asks NEAR Auth's sign-in server and prints its answers. So NEAR Auth signs
-  players in where the game runs at exactly `http://localhost:3000` on a machine that has the helper account's
-  key, and nowhere else until NEAR Auth adds the hosted address to its list. A reviewer's fresh copy has no
-  such key, and the hosted game shows the button as not available. What it did on the chain can be read: the
-  helper carried a player's approvals to NEAR Auth's contract `fast-auth.testnet`
-  ([B3Ryij…](https://testnet.nearblocks.io/txns/B3RyijTgpmZSH8H3vDsToNpNWkravahdjNoj5X3C7EAJ),
-  [7dVuZE…](https://testnet.nearblocks.io/txns/7dVuZEQQmnFRw4sDZHcpbTrs2aK1kHPVeKLvW41kCbBX)).
 `node scripts/rotate-server-key.mjs` replaces the server's key.
 
 The prize vault fills from players' top-ups. To add to it yourself: `npm run add-prize -- 10` puts 10 NEAR into
@@ -295,7 +336,8 @@ standing orders, since those are on the contract, and names them from `NPCS` in 
 Fill in the `mainnet` block of `src/network.js` and set `NETWORK`, deploy the contract and name its greeter,
 give the server the same names in its settings, and deploy. The steps are written at the top of
 `src/network.js`. On mainnet NEAR Auth signs players in only on an address it has approved
-(docs.auth.near.org).
+(docs.auth.near.org). Before real NEAR is in the vault, the full-access key of the contract's account has to be
+removed or put behind a multisig, so that no single person can change the code or move the vault.
 
 ## Limits, said plainly
 
@@ -305,15 +347,33 @@ give the server the same names in its settings, and deploy. The steps are writte
 - The welcome bait is 5 per account, and accounts are cheap: somebody can make many.
 - The server and the helper use free public nodes of NEAR unless `NEAR_RPC` names another; those turn a busy
   server away.
-- NEAR Auth on testnet works at `http://localhost:3000` only, until NEAR Auth approves the hosted address.
-- The contract has not been audited. Its account is also its own owner, and the wasm on the chain was built on
-  a developer's machine, not reproducibly: the source here is what was deployed, but the chain cannot prove it.
+- Signing in with Google, Apple or email is closed on the hosted address: NEAR Auth's shared test client sends
+  people back only to `http://localhost:3000` and to NEAR Auth's own demo. A reviewer's fresh copy cannot try
+  it either (see "Signing in").
+- The contract has not been audited. Its account is also its own owner and still has one full-access key, on
+  the developer's machine: whoever holds that key could put other code there or send the account's NEAR away,
+  the vault included.
+- The wasm on the chain was built on that machine with `npm run build:contract`. Building this source there
+  again, also from a fresh clone in another folder, gives the hash the chain shows (`npm run verify` prints the
+  chain's, the build prints its own). It is not a reproducible-build image, so another machine or toolchain may
+  give another hash.
+- The game's key in the browser cannot move NEAR, but it can list and sell the player's fish and tickets and
+  take offers. Somebody who got that key out of the browser could sell a player's things cheaply to an account
+  of their own.
+- At this size the game costs a player more than it pays. In the default week of `npm run simulate` (10 players,
+  4 NEAR in the vault) the players pay about 1.3 NEAR to the network in fees, and the draws pay out about 0.08 NEAR.
+  A prize is a share of the vault, so that changes only with a bigger vault.
+- The vault on testnet is mostly the makers': about a tenth of it came from top-ups, the rest was put in with
+  `add_prize` from the testnet faucet (`npm run add-prize`).
+- Coins are paid for a ticket into a draw with a prize: that is a paid prize draw. Whether and where it may run
+  with real NEAR has not been looked into.
 - The server is trusted to check catches honestly; the contract only checks the server's signature on each
   one. Whoever held the server's key could sign catches for accounts of their own, up to what the daily limits
   let through (a day's prize is a fifth of the vault), until the key is replaced
   (`node scripts/rotate-server-key.mjs`). A day's quest is worked out from the day's number, so a coming day's
   quest can be known ahead.
-- Two independent reviews (contract; server and pages) were made on 2026-11-13 and what they found was fixed,
+- Two reviews (contract; server and pages) were made on 2026-11-13 by separate runs of an AI assistant that had
+  not seen the code, and what they found was fixed,
   except what is listed here as a limit. Known and not fixed:
   - Coins do not expire, so coins bought while the vault is small can be spent when it is bigger. The price
     follows the vault at once when it grows, which closes the worst of it; somebody filling every draw for weeks
@@ -330,6 +390,21 @@ give the server the same names in its settings, and deploy. The steps are writte
   runner is up (`npm start` with their keys, or `npm run boats`).
 - The git history starts on 2026-11-13: the game was written outside git during the hackathon and brought in
   as a set of layered commits, so the commit dates say nothing about when each part was made.
+
+## Libraries, templates and AI assistance
+
+- Contract: `near-sdk` 5.30. The project's skeleton (`Cargo.toml`, `rust-toolchain.toml`) and its build come
+  from `cargo-near`. The local-chain test uses `near-sandbox` and `near-api`.
+- Pages and server: `near-api-js`, `@hot-labs/near-connect` (wallets), `function-call-key-plugin`,
+  `@fast-auth-near/browser-sdk` and `@fast-auth-near/javascript-provider` (NEAR Auth), bundled with `esbuild`
+  into `public/vendor/` (`npm run vendor`, `npm run vendor:auth`). The game's own code has no framework and no
+  build step.
+- Hosting: Caddy (set up by `deploy/setup.sh`); `wrangler` for the Cloudflare Worker.
+- The font is Fredoka, loaded from Google Fonts. The pixel art is drawn by code in `art/`. The music is one
+  piece from Google's Lyria 3 music model (`public/music/README.md`).
+- AI assistance: the code, the tests and this README were written with Claude Code (Anthropic's coding
+  assistant), directed and checked by the maker; the commits say so.
+- Everything here was written during the hackathon. There is no earlier code of the maker's in it.
 
 ## Licence
 

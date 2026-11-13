@@ -55,7 +55,7 @@ let S = null;
 await check('The contract is deployed', async () => {
   const a = await account(CONTRACT);
   if (!a || /^1+$/.test(a.code_hash)) return { fail: `${CONTRACT} has no contract code` };
-  return `${CONTRACT} holds code ${a.code_hash.slice(0, 12)}…, ${a.storage_usage} bytes of state, ${near(a.amount)}  (${NET.explorer}/address/${CONTRACT})`;
+  return `${CONTRACT} holds code ${a.code_hash} (the hash that npm run build:contract prints for this source), ${a.storage_usage} bytes of state, ${near(a.amount)}  (${NET.explorer}/address/${CONTRACT})`;
 });
 await check('Everything a player owns is a token of this one contract (NEP-245 read methods answer)', async () => {
   const [coin, bait, ticket, fish] = [await view('mt_supply', { token_id: 'coin' }), await view('mt_supply', { token_id: 'bait' }), await view('mt_supply', { token_id: 'ticket' }), await view('mt_supply', { token_id: 'anchovy' })];
@@ -222,4 +222,5 @@ await check('The server tells the game which accounts are computer boats', async
 const count = (s) => lines.filter((l) => l.status === s).length;
 if (asJson) console.log(JSON.stringify({ network: NETWORK, contract: CONTRACT, server: server || null, pass: count('PASS'), fail: count('FAIL'), skip: count('SKIP'), checks: lines }, null, 2));
 else console.log(`\n${count('PASS')} held, ${count('FAIL')} did not, ${count('SKIP')} skipped.`);
+await new Promise((ok) => process.stdout.write('', ok));      // all of it out, also through a pipe
 process.exit(count('FAIL') ? 1 : 0);

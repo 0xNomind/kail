@@ -5,7 +5,7 @@ import { newWorld, newPlayer, step } from './sim.js';
 import { loadArt, makeRenderer } from './render.js';
 import { paintIcons, spriteHTML } from './sprites.js';
 import { account, signedInWithAuth, NETWORK } from './account.js';
-import { mountAccount, openSignIn, disconnectWallet } from './nav.js';
+import { mountAccount, openSignIn, disconnectWallet, authOpen } from './nav.js';
 import { view, near, dayNote } from './chain.js';
 
 const art = await loadArt();
@@ -18,6 +18,7 @@ document.getElementById('signedOut').hidden = !!who;
 document.getElementById('signedIn').hidden = !who;
 if (who) { document.getElementById('acct').textContent = who; document.getElementById('acctHow').textContent = `${signedInWithAuth() ? 'NEAR Auth' : 'wallet'} · ${NETWORK}`; }
 // one button: the box it opens has the two ways of signing in (NEAR Auth, or a wallet)
+document.getElementById('signHelp').textContent = authOpen ? 'With NEAR Auth (Google, Apple or email, no wallet needed) or with a NEAR wallet.' : 'With a NEAR wallet. Signing in with Google, Apple or email is not open at this address yet.';
 document.getElementById('signin').addEventListener('click', () => openSignIn());
 document.getElementById('signout').addEventListener('click', () => disconnectWallet());
 

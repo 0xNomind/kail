@@ -37,7 +37,7 @@ export async function disconnectWallet() {
 // and a NEAR wallet. What happens while signing in is said in the box.
 let signBox = null;
 // NEAR Auth signs people in only on the addresses it has been told about (src/network.js)
-const authOpen = !!NET.auth.clientId && (!NET.auth.onlyAt || location.origin === NET.auth.onlyAt);
+export const authOpen = !!NET.auth.clientId && (!NET.auth.onlyAt || location.origin === NET.auth.onlyAt);
 export function openSignIn() {
   if (!signBox) {
     signBox = document.createElement('div');

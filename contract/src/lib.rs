@@ -91,7 +91,7 @@ pub struct Profile {
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Contract {
-    /// May change the rules below. Cannot touch anybody's tokens.
+    /// May change the rules below. No method lets it touch anybody's tokens.
     owner: AccountId,
     /// The game's server: the only account that may say what a cast caught.
     minter: AccountId,

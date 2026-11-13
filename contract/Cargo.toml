@@ -1,6 +1,6 @@
 [package]
 name = "contract"
-description = "cargo-near-new-project-description"
+description = "Kail: the fishing game's tokens, quest, markets, prize vault and daily draw"
 version = "0.1.0"
 edition = "2024"
 resolver = "3"

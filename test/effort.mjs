@@ -40,5 +40,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const a = rows[1];
     console.log(id.padEnd(10), rows.map(cell).join(''), `   ${(100 * a.other / a.casts).toFixed(0).padStart(3)}%  ${(100 * a.lost / a.casts).toFixed(0).padStart(3)}%`);
   }
-  console.log('\na chest holds:', RARE.map((r) => `${r.id} ${r.odds}%`).join(', '));
+  const odds = RARE.reduce((a, r) => a + r.odds, 0);
+  console.log('\na chest holds:', RARE.map((r) => `${r.id} ${(100 * r.odds / odds).toFixed(0)}%`).join(', '));
 }

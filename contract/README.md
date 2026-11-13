@@ -34,8 +34,8 @@ What it does so far:
 
 The vault holds every NEAR of every top-up and the ticket market's fees. A day's prize is 20% of the vault
 as it is when that day begins (the owner can change the share): it is set aside then, so it is known all day,
-and what comes in during the day counts for the days after. Over time all of it comes back to players as prizes. Nothing lets anybody
-take NEAR out of the vault any other way.
+and what comes in during the day counts for the days after. Over time all of it comes back to players as prizes. No method of
+the contract takes NEAR out of the vault any other way (the account's own full-access key could: see the main README, Limits).
 
 Not there: the standard's `mt_transfer_call` / `mt_batch_transfer_call` and approvals (a token cannot be handed to another contract).
 
