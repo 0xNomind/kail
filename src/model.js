@@ -123,7 +123,17 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
     if (c.lastDay != null && c.lastDay !== today()) { const d = drawOf(c.lastDay); if (!d.settled && d.tickets === 0) vault += d.pool; }
     return (vault * BigInt(c.prizePercent)) / 100n;
   }
-  const coinPriceNow = () => (c.coinPrice && c.coinPrice.day === today() ? c.coinPrice.price : priceFor(prizeForecast(), c.coinsPerTicket));
+  // What a coin costs right now: the price set with today's prize, or more when the vault has grown since (today's
+  // price grown as the prize has, in millionths of a NEAR, rounded up): NEAR added to the vault during a day
+  // does not leave coins at the old price until the day is over. (contract: coin_price_now)
+  function coinPriceNow() {
+    if (!(c.coinPrice && c.coinPrice.day === today())) return priceFor(prizeForecast(), c.coinsPerTicket);
+    const set = c.coinPrice.price, prize = drawOf(today()).pool, now = prizeNow();
+    if (now <= prize) return set;
+    if (prize < PRICE_STEP) { const p = priceFor(now, c.coinsPerTicket); return p > set ? p : set; }
+    const units = (set / PRICE_STEP) * (now / PRICE_STEP), by = prize / PRICE_STEP;
+    return ((units + by - 1n) / by) * PRICE_STEP;
+  }
   function startDay() {
     const day = today();
     if (c.lastDay === day) return;
@@ -262,6 +272,7 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
       need(day < today(), 'That day is not over yet');
       const d = { ...drawOf(day) };
       need(!d.settled, 'That draw has been held already');
+      need(d.tickets > 0, "No ticket was in that day's draw");
       d.settled = true;
       const roll = Math.floor(rnd() * ONE_IN), winners = Math.min(Math.floor(d.tickets / ONE_IN) + (roll < d.tickets % ONE_IN ? 1 : 0), MAX_WINNERS);
       d.won = [];

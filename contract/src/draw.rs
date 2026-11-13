@@ -98,6 +98,8 @@ impl Contract {
         let mut d = self.draw_of(day);
         let key = (day, player.clone());
         let mine = self.entered.get(&key).copied().unwrap_or(0);
+        // the accounts that hold the draw do not take part in it
+        require!(player != self.owner && player != self.minter, "The game's own accounts do not enter the draw");
         require!(mine + amount <= PLAYER_CAP, format!("One player can put {PLAYER_CAP} tickets into a day's draw"));
         require!(d.tickets + amount as u64 <= DRAW_CAP, "Today's draw is full: keep the ticket for the next one");
         self.burn(&player, &[(TICKET, amount as u128)], Some("draw"));
@@ -138,6 +140,10 @@ impl Contract {
             return d.winners;
         }
         require!(!d.settled, "That draw has been held already");
+        // a day nobody entered has no draw: its prize went back into the vault when the next day began. Without
+        // this, whoever held the server's key could "hold" every empty day there ever was and have the vault
+        // pay for each.
+        require!(d.tickets > 0, "No ticket was in that day's draw");
         d.settled = true;
 
         // One ticket in five wins. Whole fives give one winner each; for what is left over the chain rolls:
@@ -274,7 +280,7 @@ impl Contract {
     pub(crate) fn today(&self) -> u64 {
         Self::now_ms() / self.day_ms
     }
-    fn draw_of(&self, day: u64) -> Draw {
+    pub(crate) fn draw_of(&self, day: u64) -> Draw {
         self.draws.get(&day).cloned().unwrap_or_default()
     }
     /// The first thing that touches the vault or a draw on a new day sets that day's prize aside. Nothing
@@ -355,6 +361,9 @@ impl Contract {
         if *caller != self.minter || *caller == env::current_account_id() {
             return;
         }
+        // (the prizes owed and the draw are written down first, so that what they cost is in the gas counted)
+        self.owed.flush();
+        self.draws.flush();
         let fee = (u128::from(env::used_gas().as_gas()) + DRAW_OVERHEAD_GAS) * GAS_PRICE;
         if self.vault < fee {
             return;

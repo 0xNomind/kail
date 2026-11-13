@@ -166,7 +166,8 @@ export function makeWeek({ seed = 1, dayMs = 3_600_000, vault = 4, players = 10,
     chain.now = Math.max(chain.now, end - 1);
     const t = today, before = chain.draw(day), entered = Number(before.tickets), q = chain.state().quest, coin = chain.coinPrice();
     chain.now = end + 60_000;      // the server looks every minute for a day to hold
-    const winners = chain.call(SERVER, 'settle_draw', day), held = chain.draw(day), books = chain.audit(), moneyAfter = chain.money();
+    // (a day nobody entered has no draw to hold: its prize goes back into the vault when the next day begins)
+    const winners = entered ? chain.call(SERVER, 'settle_draw', day) : 0, held = chain.draw(day), books = chain.audit(), moneyAfter = chain.money();
     for (const id of chain.raw.draws.get(day).won || []) { const b = boats.find((x) => x.id === id); if (b) b.won += BigInt(held.prize_each); }
     return {
       day: n, players: boats.length, quest: q.needs.map(([id, k]) => `${k} ${id}`).join(', '),

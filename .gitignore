@@ -1,11 +1,29 @@
+# what is built or downloaded
 node_modules/
-art/out/
-.DS_Store
-server/.dev.vars
-contract/target/
-test/replay-log*.mjs
-server/npc-accounts.json
 dist/
+art/out/
+contract/target/
 .wrangler/
 server/.wrangler/
+
+# settings and keys: never in the repository (server/dev.vars.example is the list of names, without values)
+server/.dev.vars
+.dev.vars
+.dev.vars.*
+*.vars
+!*.vars.example
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+.near-credentials/
+server/npc-accounts.json
 server/.public-key
+
+# local leftovers
+.DS_Store
+*.log
+.claude/
+test/replay-log*.mjs

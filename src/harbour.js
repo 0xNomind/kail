@@ -93,7 +93,7 @@ function draw(page) {
   // the player's own last transactions from this browser, each with its link
   const txs = myTransactions(me);
   $('mine').hidden = !txs.length;
-  $('mineList').innerHTML = txs.map((t) => `<li><span><b>${esc(t.text)}</b><span class="sub">${when(t.at)}</span></span><span class="res"><a href="${txUrl(t.tx)}" target="_blank" rel="noopener">See the transaction</a></span></li>`).join('');
+  $('mineList').innerHTML = txs.map((t) => `<li><span><b>${esc(t.text)}</b><span class="sub">${when(t.at)}</span></span><span class="res"><a href="${esc(txUrl(t.tx))}" target="_blank" rel="noopener">See the transaction</a></span></li>`).join('');
 
   const sales = S.ticketOrders.filter((o) => !o.buying), bids = S.ticketOrders.filter((o) => o.buying);
   const low = sales.length ? sales.reduce((a, o) => (BigInt(o.price) < BigInt(a) ? o.price : a), sales[0].price) : null;

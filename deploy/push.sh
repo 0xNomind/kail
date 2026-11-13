@@ -71,7 +71,8 @@ git ls-files -z | tar --null -T - -czf - | ssh "$HOST" "$AS_ROOT; \$S rm -rf /op
 if [ "$KEYS" = 1 ]; then
   ssh "$HOST" "$AS_ROOT; \$S install -d -o kail -g kail -m 700 /home/kail/.near-credentials /home/kail/.near-credentials/$network"
   tar -czf - -C "$HOME/.near-credentials/$network" "${keyfiles[@]}" | ssh "$HOST" "$AS_ROOT; \$S tar -xzf - -C /home/kail/.near-credentials/$network --no-same-owner && \$S chown -R kail:kail /home/kail/.near-credentials && \$S chmod 600 /home/kail/.near-credentials/$network/*.json"
-  ssh "$HOST" "$AS_ROOT; \$S install -d -o kail -g kail -m 750 /opt/kail/server && umask 077 && cat > /tmp/kail-vars.\$\$ && \$S install -o kail -g kail -m 600 /tmp/kail-vars.\$\$ /opt/kail/server/.dev.vars; rm -f /tmp/kail-vars.\$\$" < "$vars"
+  # the settings go straight from this machine into their place, readable by the service's user only
+  ssh "$HOST" "$AS_ROOT; \$S install -d -o root -g kail -m 750 /opt/kail /opt/kail/server && \$S install -o kail -g kail -m 600 /dev/stdin /opt/kail/server/.dev.vars" < "$vars"
   echo "Keys are in place."
 fi
 
@@ -79,9 +80,12 @@ fi
 ssh "$HOST" "$AS_ROOT; set -e
   \$S rsync -a --delete --exclude node_modules --exclude server/.dev.vars --exclude .address /opt/kail.incoming/ /opt/kail/
   \$S rm -rf /opt/kail.incoming
-  \$S chown -R kail:kail /opt/kail
   cd /opt/kail
-  \$S runuser -u kail -- env HOME=/home/kail npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -2
+  \$S env HOME=/root npm ci --omit=dev --no-audit --no-fund --ignore-scripts 2>&1 | tail -2
+  # the code and the packages belong to root; the service's user may read them and nothing more
+  \$S chown -R root:kail /opt/kail
+  \$S chmod -R u=rwX,g=rX,o= /opt/kail
+  [ -f /opt/kail/server/.dev.vars ] && \$S chown kail:kail /opt/kail/server/.dev.vars && \$S chmod 600 /opt/kail/server/.dev.vars
   \$S systemctl restart kail
   sleep 6
   \$S systemctl is-active kail >/dev/null && echo 'The service is running.' || { echo 'THE SERVICE DID NOT START:'; \$S journalctl -u kail -n 25 --no-pager; exit 1; }

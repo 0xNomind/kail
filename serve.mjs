@@ -23,16 +23,23 @@ const loadGame = async () => (game ||= await import('./server/game.mjs'));
 // has (the hosted one): everything under /api is then passed on to it, and the pages are served from here.
 const elsewhere = !env.NEAR_KEY ? String(process.env.KAIL_SERVER || env.KAIL_SERVER || '').replace(/\/$/, '') : '';
 async function passOn(req, res) {
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
+  const chunks = await bodyOf(req);
+  if (!chunks) { res.writeHead(413, { 'content-type': 'application/json', connection: 'close' }).end(JSON.stringify({ error: 'Too long' })); return; }
   const answer = await fetch(elsewhere + req.url, { method: req.method, headers: { 'content-type': req.headers['content-type'] || 'application/json' }, body: chunks.length ? Buffer.concat(chunks) : undefined });
   res.writeHead(answer.status, { 'content-type': answer.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' });
   res.end(Buffer.from(await answer.arrayBuffer()));
 }
+// A request's body, read up to a limit: more than that is not a request of the game's, and is not kept in memory.
+const MOST_BODY = 96 * 1024;
+async function bodyOf(req) {
+  const chunks = []; let size = 0;
+  for await (const c of req) { size += c.length; if (size > MOST_BODY) return null; chunks.push(c); }
+  return chunks;
+}
 async function api(req, res) {
   const { default: worker } = await loadGame();
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
+  const chunks = await bodyOf(req);
+  if (!chunks) { res.writeHead(413, { 'content-type': 'application/json', connection: 'close' }).end(JSON.stringify({ error: 'Too long' })); return; }
   const request = new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined });
   const answer = await worker.fetch(request, env);
   res.writeHead(answer.status, Object.fromEntries(answer.headers));
@@ -89,18 +96,60 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 const HELPER = { '/api/auth/open': 'open', '/api/auth/sign': 'sign', '/api/welcome': 'bait' };
 const SITE = /^\/(index|play|harbour|tickets|week)\.html$|^\/favicon\.ico$|^\/(src|public)\/[^?#]+$/;
-const answer = (req, res) => {
+const PAGES = /^\/(play|harbour|tickets|week)\.html$/;
+// what every answer carries: the pages are not to be shown inside somebody else's page, and a file is what its type says
+const SAFE = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin' };
+
+// ---- who is asking, and how often
+// Behind a web server on this machine (Caddy) every request comes from this machine, and the asker's address is
+// in X-Forwarded-For. Without one in front, the asker is whoever the connection is from.
+const loopback = (a) => /^(::1|127\.|::ffff:127\.)/.test(a || '');
+function askerOf(req) {
+  const direct = req.socket.remoteAddress || '', passed = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim().slice(0, 64);
+  return { address: loopback(direct) && passed ? passed : direct, thisMachine: loopback(direct) && !passed && !req.headers['cf-connecting-ip'] };
+}
+// So many requests at once and so many a second after that, for each address: a game asks a few times a minute,
+// so this only stops somebody making the server (and the public nodes it asks) work for nothing.
+function limiter(burst, perSecond) {
+  const seen = new Map();
+  return (address) => {
+    const now = Date.now(), had = seen.get(address) || { left: burst, at: now };
+    const left = Math.min(burst, had.left + ((now - had.at) / 1000) * perSecond);
+    if (seen.size > 20_000) for (const [k, v] of seen) if (now - v.at > 120_000) seen.delete(k);
+    if (left < 1) { seen.set(address, { left, at: now }); return false; }
+    seen.set(address, { left: left - 1, at: now });
+    return true;
+  };
+}
+const gameRoom = limiter(40, 8), helperRoom = limiter(6, 0.1);
+const busy = (res) => res.writeHead(429, { 'content-type': 'application/json', 'retry-after': '5', 'cache-control': 'no-store' }).end(JSON.stringify({ error: 'Too many requests from your address. Try again in a moment.' }));
+// NEAR Auth's sign-in client for testnet lets only a page at http://localhost:3000 sign people in, so the two
+// routes that carry its sign-ins and approvals answer only this machine's own browser then. Where the game has a
+// sign-in client of its own (NEAR_AUTH_CLIENT, as on mainnet), they are open.
+const authOpenTo = (asker) => !!env.NEAR_AUTH_CLIENT || asker.thisMachine;
+
+function answer(req, res) {
   const url = new URL(req.url, 'http://x');
+  const asker = askerOf(req);
   if (elsewhere && url.pathname.startsWith('/api/')) { passOn(req, res).catch((e) => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: `The game's server at ${elsewhere} did not answer: ${String(e?.message || e).slice(0, 120)}` }))); return; }
-  if (req.method === 'POST' && HELPER[url.pathname]) { auth(req, res, HELPER[url.pathname]).catch((e) => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(e?.message || e).slice(0, 200) }))); return; }
+  if (req.method === 'POST' && HELPER[url.pathname]) {
+    if (url.pathname.startsWith('/api/auth/') && !authOpenTo(asker)) { res.writeHead(403, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ error: 'NEAR Auth signs people in only at http://localhost:3000 on testnet.' })); return; }
+    if (!asker.thisMachine && !helperRoom(asker.address)) { busy(res); return; }
+    auth(req, res, HELPER[url.pathname]).catch((e) => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(e?.message || e).slice(0, 200) })));
+    return;
+  }
+  if (url.pathname.startsWith('/api/') && !asker.thisMachine && !gameRoom(asker.address)) { busy(res); return; }
   if (url.pathname === '/api/npcs') { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(boats ? boats.status() : [])); return; }
   if (url.pathname.startsWith('/api/')) { api(req, res).catch((e) => { res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(e?.message || e).slice(0, 200) })); }); return; }
   let rel = decodeURIComponent(url.pathname);
-  // clean addresses: /play shows play.html, and the old /play.html address moves on to /play
-  if (rel.endsWith('.html') && rel !== '/index.html') { res.writeHead(301, { location: rel.slice(0, -5) + url.search }).end(); return; }
+  // an address is letters, digits and a few marks: nothing that could end a header line or a file name
+  if (/[\0-\x1f\\]/.test(rel)) { res.writeHead(400, { 'content-type': 'text/plain' }).end('Bad request'); return; }
+  // clean addresses: /play shows play.html, and the old /play.html address moves on to /play (the game's own
+  // pages only: an address made up to look like one must not send anybody somewhere else)
+  if (PAGES.test(rel)) { res.writeHead(301, { location: rel.slice(0, -5) + url.search }).end(); return; }
   if (rel.endsWith('/')) rel += 'index.html';
   else if (!path.extname(rel) && fs.existsSync(path.join(root, rel + '.html'))) rel += '.html';
-  // Only the site itself is handed out: the four pages, their scripts and styles, the pictures and the music.
+  // Only the site itself is handed out: the pages, their scripts and styles, the pictures and the music.
   // Everything else in this folder (the server's code and, above all, its settings with the keys) is not a page:
   // asked for by address, it is "not found". The same list is what gets published (scripts/build-site.mjs).
   if (!SITE.test(rel) || rel.split('/').some((part) => part.startsWith('.'))) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); return; }
@@ -108,10 +157,17 @@ const answer = (req, res) => {
   if (!file.startsWith(root + path.sep)) { res.writeHead(403).end('Forbidden'); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); return; }
-    res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
+    res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store', ...SAFE });
     res.end(data);
   });
-};
-http.createServer(answer)
+}
+// An address this server cannot even read (a broken escape, two slashes for a start) is answered "bad request".
+// Nothing a stranger sends may stop the server: it also runs the boats, and holds the draws.
+function safely(req, res) {
+  try { answer(req, res); }
+  catch { try { if (!res.headersSent) res.writeHead(400, { 'content-type': 'text/plain' }); res.end('Bad request'); } catch { /* the connection is gone */ } }
+}
+process.on('unhandledRejection', (e) => console.log('a promise was left unanswered:', String(e?.message || e).slice(0, 200)));
+http.createServer(safely)
   .on('error', (e) => { console.log(e.code === 'EADDRINUSE' ? `Port ${port} is taken by another program. Close that one and start again.` : String(e)); process.exit(1); })
   .listen(port, host, () => console.log(`Kail is at http://localhost:${port}${elsewhere ? ` (its server: ${elsewhere})` : env.NEAR_KEY ? '' : ' (no server key here: the pages work, catches cannot be landed; see README.md)'}`));

@@ -109,6 +109,10 @@ async function readTicket(env, t) {
   if (!(await crypto.subtle.verify('HMAC', await seaKey(env), sig, enc.encode(t.body)))) return null;
   return JSON.parse(t.body);
 }
+// A ticket is good for twelve hours from when its line of seas began. After that the game asks for a new sea:
+// an old ticket would let a sea be played as fast as anybody liked, since all that time has "really passed".
+const TICKET_LASTS_MS = 12 * 3_600_000;
+const tooOld = (says, now) => !(now - Number(says.t0) < TICKET_LASTS_MS);
 const startOf = (says) => (says.sea ? { sea: says.sea, back: says.back } : { seed: says.seed, back: says.back });
 const goodAccount = (a) => typeof a === 'string' && a.length <= 64 && /^[a-z0-9._-]+$/.test(a);
 async function body(request) {
@@ -142,7 +146,7 @@ async function newSea(request, env) {
 async function keepSea(request, env) {
   const now = Date.now(), { ticket: t, ticks, moves } = (await body(request)) || {};
   const says = await readTicket(env, t);
-  if (!says) return json({ error: 'That is not a ticket of this server', stale: true }, 409);
+  if (!says || tooOld(says, now)) return json({ error: 'That is not a ticket of this server', stale: true }, 409);
   const late = tooFast(says, ticks, now);
   if (late) return json({ error: 'Too soon', retry_in_ms: late }, 425);
   const got = replay(says, ticks, moves);
@@ -162,7 +166,7 @@ async function land(request, env) {
   if (!goodAccount(account)) return json({ error: 'No such account' }, 400);
   if (!/^\d{1,20}$/.test(String(cast))) return json({ error: 'No such cast' }, 400);
   const says = await readTicket(env, t);
-  if (!says || says.a !== account) return json({ error: 'That is not a ticket for this sea', stale: true }, 409);
+  if (!says || says.a !== account || tooOld(says, now)) return json({ error: 'That is not a ticket for this sea', stale: true }, 409);
 
   const c = connect(env);
   const player = await view(c, 'player', { account_id: account });
@@ -192,16 +196,13 @@ const approve = (env, account, cast, what, mark) => b64(serverPair(env).sign(enc
 /// The public key those approvals are signed with, as the contract keeps it (base64 of its 32 bytes).
 export const approvalKey = (env) => b64(serverPair(env).getPublicKey().data);
 
-// Hold the draw of the days that are over and have tickets in them (the last three, in case a run was missed).
+// Hold every draw that is over, has tickets in it and has not been held: the days the contract lists as its last
+// draws (so a draw is not left open when this server was down for longer than a day or two), oldest first.
 export async function holdDraws(env) {
   const c = connect(env);
-  const today = BigInt((await view(c, 'draw')).day);
+  const open = (await view(c, 'past_draws')).filter((d) => !d.settled && d.tickets !== '0').sort((a, b) => Number(BigInt(a.day) - BigInt(b.day)));
   const held = [];
-  for (let back = 3n; back >= 1n; back--) {
-    const day = today - back;
-    if (day < 0n) continue;
-    const d = await view(c, 'draw', { day: String(day) });
-    if (d.settled || d.tickets === '0') continue;
+  for (const { day } of open) {
     try {
       const winners = await call(c, 'settle_draw', { day: String(day) }, 300n * TGAS), tx = lastHash;
       // the contract cannot know the hash of its own transaction: tell it, so the Harbour can link to the draw

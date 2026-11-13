@@ -83,7 +83,9 @@ impl Contract {
             let refused = "Only the game's server can land a catch";
             let key = the_server_key().unwrap_or_else(|| env::panic_str(refused));
             let signature: [u8; 64] = approval.and_then(|a| a.0.try_into().ok()).unwrap_or_else(|| env::panic_str(refused));
-            let text = approval_text(&env::current_account_id(), &caller, cast.0, &what, sea.as_deref().unwrap_or(""));
+            // the sea's new mark is part of what the server signed: it has to be there
+            let mark = sea.as_deref().filter(|m| !m.is_empty()).unwrap_or_else(|| env::panic_str(refused));
+            let text = approval_text(&env::current_account_id(), &caller, cast.0, &what, mark);
             require!(env::ed25519_verify(&signature, text.as_bytes(), &key), "The game's server did not approve this catch");
             caller
         };

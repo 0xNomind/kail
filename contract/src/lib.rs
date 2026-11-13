@@ -183,7 +183,10 @@ pub struct StateView {
 
 #[near]
 impl Contract {
+    /// Sets the contract up, once. Only the contract's own account can: deployed and set up by its holder, never
+    /// by whoever calls first.
     #[init]
+    #[private]
     pub fn new(owner: AccountId) -> Self {
         Self {
             minter: owner.clone(),
@@ -367,7 +370,7 @@ const COIN_PRICE: &[u8] = b"coin_price";
 
 impl Contract {
     /// The coin price that goes with a day's prize: the prize spread over the day's tickets and over the coins
-    /// a ticket takes, rounded up to a price that can be shown, and never under 0.01 NEAR.
+    /// a ticket takes, rounded up to a price that can be shown, and never under 0.00001 NEAR.
     /// The price of a coin on a day with this prize. A winning ticket gets a hundredth of the prize and one
     /// ticket in five wins, so a ticket is worth a five-hundredth of the prize: the coins for one ticket are
     /// priced at just that. So the bait for a ticket costs about what the ticket is worth, whatever the size of
@@ -385,10 +388,25 @@ impl Contract {
         bytes.extend_from_slice(&price.to_le_bytes());
         env::storage_write(COIN_PRICE, &bytes);
     }
+    /// What a coin costs right now: the price set with today's prize, or more when the vault has grown since
+    /// (then the price that goes with the prize the vault would give now). Without the second part, NEAR added
+    /// to the vault during a day would leave coins at the old, low price until the day was over: time enough to
+    /// buy the coins for many days of a prize that is about to be much bigger.
     pub(crate) fn coin_price_now(&self) -> u128 {
         if let Some(b) = env::storage_read(COIN_PRICE) {
             if u64::from_le_bytes(b[..8].try_into().unwrap()) == self.today() {
-                return u128::from_le_bytes(b[8..24].try_into().unwrap());
+                let set = u128::from_le_bytes(b[8..24].try_into().unwrap());
+                // the prize set aside for today, and the prize the vault would give as it stands now
+                let (prize, now) = (self.draw_of(self.today()).pool, self.prize_now());
+                if now <= prize {
+                    return set;
+                }
+                // a day that began with an empty vault had no prize to go by: the price of the vault as it is
+                if prize < PRICE_STEP {
+                    return set.max(self.price_for(now));
+                }
+                // otherwise today's price, grown as the prize has (counted in millionths of a NEAR, rounded up)
+                return ((set / PRICE_STEP) * (now / PRICE_STEP)).div_ceil(prize / PRICE_STEP) * PRICE_STEP;
             }
         }
         self.price_for(self.prize_forecast())

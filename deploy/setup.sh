@@ -60,7 +60,7 @@ fi
 
 echo "2. The user and the folders…"
 id kail >/dev/null 2>&1 || useradd --system --create-home --home-dir /home/kail --shell /usr/sbin/nologin kail
-install -d -o kail -g kail -m 750 /opt/kail /opt/kail/server
+install -d -o root -g kail -m 750 /opt/kail /opt/kail/server
 install -d -o kail -g kail -m 700 /home/kail/.near-credentials /home/kail/.near-credentials/testnet /home/kail/.near-credentials/mainnet
 
 echo "3. The service…"
@@ -74,6 +74,17 @@ if [ "${KAIL_NO_CADDY:-}" != 1 ]; then
 # Kail (written by deploy/setup.sh): HTTPS for the address, everything passed on to the game on this machine.
 $ADDRESS {
 	encode zstd gzip
+	# nothing the game sends is bigger than this; more is turned away before it reaches the game
+	request_body {
+		max_size 128KB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+		-Server
+	}
 	reverse_proxy 127.0.0.1:3000
 }
 EOF
@@ -93,7 +104,7 @@ EOF
   systemctl enable caddy >/dev/null 2>&1
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
 fi
-echo "$ADDRESS" > /opt/kail/.address; chown kail:kail /opt/kail/.address
+echo "$ADDRESS" > /opt/kail/.address; chown root:kail /opt/kail/.address; chmod 640 /opt/kail/.address
 
 echo
 echo "Ready. From your own machine, in the project's folder:"

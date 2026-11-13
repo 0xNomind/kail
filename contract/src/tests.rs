@@ -110,25 +110,36 @@ fn a_top_up_keeps_only_the_price_of_whole_coins() {
 fn the_bait_for_a_ticket_costs_a_fifth_of_what_a_win_brings() {
     let mut c = fresh();
     assert_eq!(c.coin_price(), U128(LOWEST_COIN_PRICE), "an empty vault: the lowest price");
-    // day 0: the game's makers put 1000 NEAR in the vault
+    // day 0: a player tops up while the vault is empty, at the lowest price
+    as_player(1, NEAR);
+    assert_eq!(c.top_up(), U128(100_000), "an empty vault: the lowest price");
+    // then the game's makers put 1000 NEAR in the vault. The price follows at once: coins are not left at the
+    // old price for the rest of the day, to be bought up for the bigger prizes to come
     as_player(0, NEAR * 1000);
     c.add_prize();
-    as_player(1, NEAR);
-    assert_eq!(c.top_up(), U128(100_000), "day 0 began with an empty vault: still the lowest price");
+    assert_eq!(c.coin_price(), U128(NEAR * 91 / 10_000), "the price that goes with the vault as it is now");
+    as_player(2, NEAR);
+    assert_eq!(c.top_up(), U128(109), "1 NEAR buys 109 coins now, not 100,000");
 
-    // Day 1 begins with 1001 NEAR: the prize is 200.2 NEAR. A winning ticket gets a hundredth of it (2.002 NEAR),
+    // Day 1 begins with a little under 1002 NEAR: the prize is 200.2 NEAR and a bit. A winning ticket gets a hundredth of it (2.002 NEAR),
     // and one ticket in five wins, so a ticket is worth a five-hundredth (0.4004 NEAR). The 44 coins a ticket
     // is counted as cost just that: 0.0091 NEAR a coin.
     at(1, NEAR, NEXT_DAY, 1);
-    let (prize, price) = (NEAR * 1001 / 5, NEAR * 91 / 10_000);
-    assert_eq!(c.coin_price(), U128(price), "the forecast before anything has happened today");
-    assert_eq!(c.top_up(), U128(109), "1 NEAR buys 109 coins at 0.0091");
+    let vault = c.vault().0;
+    let (prize, price) = (vault / 5, c.coin_price().0);
+    assert_eq!(c.top_up(), U128(NEAR / price), "1 NEAR buys coins at the forecast price");
     assert_eq!((c.draw(None).pool, c.draw(None).fixed), (U128(prize), true));
-    assert_eq!(price * 44 * 5, prize / 100, "the bait for five tickets costs what one winning ticket gets");
-    // more top-ups today do not move today's price
-    at(2, NEAR * 500, NEXT_DAY, 1);
+    // the price is the prize spread over 500 tickets of 44 coins, rounded up to a millionth of a NEAR: so the
+    // bait for five tickets costs what one winning ticket gets (and at most a rounding more)
+    assert!(price * 44 * 5 >= prize / 100 && price * 44 * 5 < prize / 100 + NEAR / 1000, "{price} {prize}");
+    // a small top-up does not move today's price; one that makes the vault much bigger moves it up at once
+    at(2, NEAR, NEXT_DAY, 1);
     c.top_up();
     assert_eq!(c.coin_price(), U128(price));
+    at(2, NEAR * 500, NEXT_DAY, 1);
+    c.top_up();
+    assert!(c.coin_price().0 > price, "the vault grew by half: a coin costs more at once");
+    let price = c.coin_price().0;
 
     // day 2: the vault holds more, so the prize and the price are higher again
     at(2, 0, 2 * NEXT_DAY, 1);
@@ -241,6 +252,10 @@ fn a_player_lands_their_own_catch_with_the_servers_approval() {
     assert!(refuses(|| c.land(None, cast, "chest".to_string(), secret(), Some("mark-2".to_string()), Some(b64(APPROVES_CHEST)))));
     as_player(2, 0);
     assert!(refuses(|| c.land(Some(accounts(1)), cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY)))));
+    // without the sea's mark the approval is not the one the server signed
+    as_player(1, 0);
+    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), None, Some(b64(APPROVES_ANCHOVY)))));
+    assert!(refuses(|| c.land(None, cast, "anchovy".to_string(), secret(), Some(String::new()), Some(b64(APPROVES_ANCHOVY)))));
     // the approved catch goes into the player's storage, and the sea's mark is kept
     as_player(1, 0);
     assert_eq!(c.land(None, cast, "anchovy".to_string(), secret(), Some("mark-1".to_string()), Some(b64(APPROVES_ANCHOVY))), Some("anchovy".to_string()));
@@ -653,8 +668,9 @@ fn one_ticket_in_five_wins_a_hundredth_and_what_is_not_won_goes_back() {
     assert_eq!(owed(&c, 2), NEAR / 5 / 100);
     assert_eq!(c.draw(Some(U64(2))).prize_each, U128(NEAR / 5 / 100));
     assert_eq!(c.vault().0 + c.draw(None).pool.0 + owed(&c, 2), NEAR, "nothing is lost: it stays in the vault");
-    // holding the draw of a day nobody entered pays nothing and is harmless
-    assert_eq!(c.settle_draw(U64(1), None), 0);
+    // a day nobody entered has no draw to hold (its prize went back into the vault by itself)
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.settle_draw(U64(1), None))).is_err());
+    assert_eq!(c.draw(Some(U64(1))).settled, false);
 }
 
 #[test]
@@ -1166,6 +1182,44 @@ fn the_vault_pays_the_server_back_for_holding_a_draw() {
     c.settle_draw(U64(1), Some("GDHezAMM7qjBtzJcPL9Py1b2aTQrLiUaLHt6TmzmR6KM".to_string()));
     assert_eq!(c.vault().0, vault);
 }
+/// With the server's key alone nobody can have the vault pay for draws that never were: an empty day, or a day
+/// that never happened, is refused, and the vault stays as it is.
+#[test]
+fn the_vault_does_not_pay_for_draws_of_empty_days() {
+    let mut c = fresh();
+    funded(&mut c, 1, 10, 0);
+    at(0, 0, NEXT_DAY, 9);
+    c.configure(None, None, Some(accounts(3)), None, None);
+    at(0, 1, 5 * NEXT_DAY, 9);
+    c.add_prize();
+    let vault = c.vault().0;
+    at(3, 0, 5 * NEXT_DAY, 9);
+    for day in 0..5 {
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.settle_draw(U64(day), None))).is_err(), "day {day}");
+    }
+    assert_eq!(c.vault().0, vault);
+}
+/// The accounts that hold the draw (the owner and the game's server) cannot put tickets into it.
+#[test]
+fn the_games_own_accounts_do_not_enter_the_draw() {
+    let mut c = fresh();
+    funded(&mut c, 1, 10, 0);
+    at(0, 0, NEXT_DAY, 9);
+    c.configure(None, None, Some(accounts(3)), None, None);
+    for who in [0, 3] {
+        tickets(&mut c, who, 1);
+        at(who, 0, NEXT_DAY, 9);
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.enter_draw(1))).is_err(), "account {who}");
+    }
+}
+/// Sending nothing is refused: it would write a row for the receiver at the contract's cost.
+#[test]
+fn sending_no_tickets_is_refused() {
+    let mut c = fresh();
+    at(1, 1, MINUTE, 7);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.mt_transfer(accounts(2), TICKET.to_string(), U128(0), None, None))).is_err());
+}
+
 /// The owner holding a draw is paid nothing back.
 #[test]
 fn the_owner_holding_a_draw_is_not_paid_back() {

@@ -49,7 +49,7 @@ Where each claim lives, and how to check it:
 | --- | --- | --- |
 | A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
 | Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
-| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (63 tests) |
+| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (66 tests) |
 | The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
 | The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
@@ -117,7 +117,7 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
 ## What is on NEAR
 
 - Contract: [`kail-game.testnet`](https://testnet.nearblocks.io/address/kail-game.testnet), source in
-  [`contract/`](contract/README.md) (Rust, near-sdk). 63 unit tests and a test on a local chain.
+  [`contract/`](contract/README.md) (Rust, near-sdk). 66 unit tests and a test on a local chain.
 - Who pays the network: whoever acts. A player pays for their own cast and for their own catch (about 0.0003
   NEAR each), sent by the game's key without a wallet window. The game's server only signs its approval of a
   catch, which costs nothing. It holds the daily draws from an account of its own, `kail-server.testnet`, and
@@ -278,8 +278,26 @@ give the server the same names in its settings, and deploy. The steps are writte
 - NEAR Auth on testnet works at `http://localhost:3000` only, until NEAR Auth approves the hosted address.
 - The contract has not been audited. Its account is also its own owner, and the wasm on the chain was built on
   a developer's machine, not reproducibly: the source here is what was deployed, but the chain cannot prove it.
-- The server is trusted to check catches honestly; the contract only checks that the server's account reports
-  them. A day's quest is worked out from the day's number, so a coming day's quest can be known ahead.
+- The server is trusted to check catches honestly; the contract only checks the server's signature on each
+  one. Whoever held the server's key could sign catches for accounts of their own, up to what the daily limits
+  let through (a day's prize is a fifth of the vault), until the key is replaced
+  (`node scripts/rotate-server-key.mjs`). A day's quest is worked out from the day's number, so a coming day's
+  quest can be known ahead.
+- Two independent reviews (contract; server and pages) were made on 2026-11-13 and what they found was fixed,
+  except what is listed here as a limit. Known and not fixed:
+  - Coins do not expire, so coins bought while the vault is small can be spent when it is bigger. The price
+    follows the vault at once when it grows, which closes the worst of it; somebody filling every draw for weeks
+    with coins bought ahead could still take out more than they put in.
+  - A chest's find is rolled in the transaction that lands it. A player who writes their own transactions can
+    make an unwanted find fail and try again, at the cost of the fees.
+  - Storage for players' data is paid from the contract's own balance, and a day's entries are never removed:
+    the account needs NEAR beyond the vault, more as the game is used.
+  - The server keeps no memory of a throw: a changed client can try a throw as often as it likes offline and
+    hand in the one that catches.
+  - On a Cloudflare Worker the helper's hourly limits are per copy of the Worker, not for all of them.
+  - Before mainnet the helper that carries NEAR Auth approvals has to check the approval itself and send the
+    approved transaction itself; as it is, it trusts what the request says about paying the fee. (On testnet its
+    routes answer only a browser on the server's own machine.)
 - Nearly all orders on the markets are the computer's boats' so far, and the boats trade only while their
   runner is up (`npm start` with their keys, or `npm run boats`).
 - The git history starts on 2026-11-13: the game was written outside git during the hackathon and brought in

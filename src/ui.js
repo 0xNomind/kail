@@ -58,6 +58,8 @@ export function makeUI({ art, player, game }) {
   const ready = () => S().quest.needs.every(([id, n]) => held(id) >= n);
   const mine = (o) => o.account === game.account;
 
+  // text from outside the contract (a boat's name and reasons come from the game's server) is shown as text
+  const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   // A short message over the sea. `ms` is how long it stays.
   function toast(html, kind = '', ms = 2200) {
     const el = document.createElement('div');
@@ -275,7 +277,7 @@ export function makeUI({ art, player, game }) {
   const ago = (at) => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
   // an account the computer plays, if this is one (see "the other boats" in main.js)
   const boat = (id) => (game.boats || []).find((b) => b.account === id);
-  const who = (id) => { const b = boat(id); return b ? `${b.name} <i class="npc" title="Played by the computer">computer</i>` : short(id); };
+  const who = (id) => { const b = boat(id); return b ? `${esc(b.name)} <i class="npc" title="Played by the computer">computer</i>` : short(id); };
   // A long list is shown a page at a time. Gives the rows of the current page and the line to turn pages with.
   const PER_PAGE = 8;
   function paged(list, things) {
@@ -344,7 +346,7 @@ export function makeUI({ art, player, game }) {
             <div class="steps"><span class="sub">${buying ? `You pay <b>${coin(pays)}</b> · ${coin(total)} to the seller + ${coin(fee)} fee` : `You get <b>${coin(gets)}</b> · ${coin(total)} offered − ${coin(fee)} fee`}</span>
               <button class="btn row go" data-act="${buying ? 'buy' : 'fill'}" data-order="${o.id}" data-n="${mn}" ${why ? 'disabled' : off()}>Confirm</button></div>
             ${why ? `<p class="note">${why}</p>` : ''}
-            ${boat(o.account)?.reasons?.[o.id] ? `<p class="note said"><b>${boat(o.account).name}:</b> ${boat(o.account).reasons[o.id]}</p>` : ''}
+            ${boat(o.account)?.reasons?.[o.id] ? `<p class="note said"><b>${esc(boat(o.account).name)}:</b> ${esc(boat(o.account).reasons[o.id])}</p>` : ''}
           </div>`;
       }).join('');
       // what other players did with your orders lately

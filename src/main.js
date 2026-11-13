@@ -160,7 +160,7 @@ const game = {
     game.busy = true; ui.refresh();
     const stop = ui.working(doing);
     try { const value = await call(); stop(); const text = done?.(value); if (text) ui.toast(text, 'good', 3200); }
-    catch (e) { stop(); ui.toast(reason(e), 'bad', 4500); if (outOfNear(e)) nearFirst(); }
+    catch (e) { stop(); ui.toast(esc(reason(e)), 'bad', 4500); if (outOfNear(e)) nearFirst(); }
     game.busy = false;
     await new Promise((r) => setTimeout(r, 500));
     await game.refresh();
@@ -265,6 +265,8 @@ let hints = 0, pullHints = 0;
 // For the same reason a throw waits a moment after the hook is back (REST_TICKS: the server holds to it too).
 // How full the storage is right now: what the sea here has brought up (also what is still on its way to the
 // chain) plus the boxes the market holds.
+// what a node, a wallet or the server said went wrong is shown as text, never as markup
+const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const boxesUsed = () => Object.values(player.storage).reduce((a, n) => a + n, 0) + Math.max(0, S.me.held - S.me.items.reduce((a, [, n]) => a + +n, 0));
 const storageFull = () => boxesUsed() >= S.me.storage_cap;
 function tryCast() {
@@ -283,7 +285,7 @@ function tryCast() {
   const number = practice ? Promise.resolve(practiceCast())
     : lastLanding.then(async () => String(await send('cast', { seal: b64(new Uint8Array(await crypto.subtle.digest('SHA-256', secret))) })));
   // a throw the chain never saw is in this sea all the same: the sea is out of step and has to be started anew
-  number.then(() => {}, (e) => { stale = true; ui.toast(`The cast did not reach the chain: ${reason(e)}`, 'bad'); if (outOfNear(e)) nearFirst(); }).finally(() => { casting -= 1; setTimeout(game.refresh, 800); });
+  number.then(() => {}, (e) => { stale = true; ui.toast(`The cast did not reach the chain: ${esc(reason(e))}`, 'bad'); if (outOfNear(e)) nearFirst(); }).finally(() => { casting -= 1; setTimeout(game.refresh, 800); });
   throwNow = { secret: b64(secret), number };
   if (hints++ < 2) ui.toast(matchMedia('(pointer: coarse)').matches ? 'Drag left or right to steer' : 'Move the mouse or press ← → to steer');
 }
@@ -406,7 +408,7 @@ function handle(ev) {
     lastLanding = land(thrown, tick, ev).then((kind) => {
       if (ev.chest) ui.toast(kind ? `${ui.pic(kind, 22, 12)} Chest: ${ITEM_BY_ID[kind].name}!` : 'Storage was full: the chest find is lost.', kind ? 'good' : 'bad');
       else if (!kind) ui.toast(`Storage was full: the ${name.toLowerCase()} is lost.`, 'bad');
-    }, (e) => ui.toast(`The ${ev.chest ? 'chest' : name.toLowerCase()} is lost: ${reason(e)}`, 'bad')).finally(() => {
+    }, (e) => ui.toast(`The ${ev.chest ? 'chest' : name.toLowerCase()} is lost: ${esc(reason(e))}`, 'bad')).finally(() => {
       if (!ev.chest) landing[ev.id] -= 1;
       return game.refresh();
     });

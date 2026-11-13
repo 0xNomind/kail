@@ -153,7 +153,9 @@ impl Contract {
     /// A holder sends tokens to another account (the standard's transfer).
     fn send(&mut self, from: &AccountId, to: &AccountId, list: &[(&str, u128)], memo: Option<&str>) {
         require!(from != to, "Sender and receiver are the same account");
-        for &(id, _) in list {
+        for &(id, n) in list {
+            // (sending nothing would still write a row for the receiver, at the contract's cost)
+            require!(n > 0, "Send at least one");
             require!(exists(id), "No such kind of token");
             require!(can_be_sent(id), format!("{id} cannot be sent to another account: it stays with its holder"));
         }

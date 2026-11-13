@@ -201,7 +201,8 @@ export function makeRelay(env) {
     // What NEAR Auth's sign-in window gave the player, carried to NEAR Auth's contract. Answers with the call's
     // outcome: on success its value is the MPC network's signature.
     async sign({ guard_id, verify_payload, sign_payload, algorithm = 'eddsa' }) {
-      if (typeof guard_id !== 'string' || guard_id.length > 200 || typeof verify_payload !== 'string' || verify_payload.length > 12000 || sign_payload == null || !['eddsa', 'ecdsa', 'secp256k1'].includes(algorithm)) return [400, { error: 'That is not an approval from NEAR Auth' }];
+      // (a NEAR account's key is ed25519: no other kind of signature is carried)
+      if (typeof guard_id !== 'string' || guard_id.length > 200 || typeof verify_payload !== 'string' || verify_payload.length > 12000 || sign_payload == null || algorithm !== 'eddsa') return [400, { error: 'That is not an approval from NEAR Auth' }];
       // What is to be signed is the transaction itself. Who pays for the signing is read from it.
       let tx = null;
       try { tx = decodeTransaction(Uint8Array.from(Array.isArray(sign_payload) ? sign_payload : Object.values(sign_payload))); } catch { /* not a transaction this server can read */ }
@@ -211,13 +212,20 @@ export function makeRelay(env) {
         // the kinds that cannot carry the fee: a key added to the player's own account, NEAR sent out
         const keyOnly = tx.receiverId === tx.signerId && acts.length > 0 && acts.every((a) => a.addKey), sendsOut = acts.length > 0 && acts.every((a) => a.transfer);
         if (!keyOnly && !sendsOut) return [402, { error: 'This approval has to carry the signing fee. Load the page again and try once more.' }];
+        // the name the allowance is counted under has to be a NEAR account's name: nothing longer is ever kept
+        if (typeof tx.signerId !== 'string' || tx.signerId.length > 64 || !/^[a-z0-9._-]+$/.test(tx.signerId)) return [400, { error: 'That is not an approval of a NEAR account' }];
         const day = (free.get(tx.signerId) || []).filter((t) => Date.now() - t < 86_400_000);
         if (day.length >= FREE_A_DAY) return [429, { error: 'That is all the free approvals for today (sending NEAR out, the game key). Try again tomorrow.' }];
-        free.set(tx.signerId, [...day, Date.now()]);
       }
       // (should the payload ever not read as a transaction, it is still carried, a few an hour, and the log says so)
       if (!tx && !room('unread', UNREAD_AN_HOUR)) return [429, { error: 'Too many approvals this hour. Try again a little later.' }];
       if (!room('sign', SIGNS_AN_HOUR)) return [429, { error: 'Too many approvals this hour. Try again a little later.' }];
+      // a free one is counted only now that it is really carried; names not seen for a day are forgotten
+      if (tx && !pays) {
+        const now = Date.now();
+        free.set(tx.signerId, [...(free.get(tx.signerId) || []).filter((t) => now - t < 86_400_000), now]);
+        if (free.size > 5000) for (const [who, times] of free) if (!times.some((t) => now - t < 86_400_000)) free.delete(who);
+      }
       try {
         // 1 yoctoNEAR goes along for the MPC network and comes back; 300 Tgas is what NEAR Auth's own tools attach
         const r = await send(AUTH_CONTRACT[network], [actions.functionCall('sign', { guard_id, verify_payload, sign_payload, algorithm }, 300n * TGAS, 1n)]);

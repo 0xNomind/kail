@@ -28,6 +28,9 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'POST' && HELPER[url.pathname]) {
+      // NEAR Auth's sign-in client for testnet lets only a page at http://localhost:3000 sign people in: a hosted
+      // game cannot use it, so its two routes are shut here unless the game has a client of its own (as on mainnet)
+      if (url.pathname.startsWith('/api/auth/') && !env.NEAR_AUTH_CLIENT) return json(403, { error: 'NEAR Auth signs people in only at http://localhost:3000 on testnet.' });
       const r = helper(env);
       if (!r) return json(503, { error: 'This server has no welcome account (WELCOME and WELCOME_KEY in its settings)' });
       const raw = await request.text();
@@ -48,6 +51,10 @@ export default {
         let list = null;
         try { list = JSON.parse(raw); } catch { /* refused below */ }
         if (raw.length > 200_000 || !Array.isArray(list) || list.length > 50) return json(400, { error: 'Send the list of boats' });
+        // only what the game shows is kept, as plain short text: whatever else is sent is dropped
+        const text = (v, most) => (typeof v === 'string' ? v.slice(0, most) : '');
+        list = list.filter((b) => b && typeof b === 'object').map((b) => ({ account: text(b.account, 64), name: text(b.name, 40), about: text(b.about, 300), doing: text(b.doing, 40), why: text(b.why, 400),
+          reasons: Object.fromEntries(Object.entries(b.reasons && typeof b.reasons === 'object' ? b.reasons : {}).slice(0, 30).map(([k, v]) => [String(k).slice(0, 24), text(v, 400)])) }));
         if (env.BOATS) await env.BOATS.put('news', JSON.stringify({ at: Date.now(), boats: list }), { expirationTtl: 900 });
         return json(200, { kept: !!env.BOATS });
       }
