@@ -91,7 +91,7 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
   const put = (obj, field, value) => { const old = obj[field]; undo?.push(() => { obj[field] = old; }); obj[field] = value; };
   const c = {
     now: startMs ?? dayMs * 1000, dayMs, prizePercent, coinsPerTicket,
-    vault: 0n, escrow: 0n, funded: 0n, fees: 0n, serverFees: 0n, lastDay: null, coinPrice: null, nextId: 1,
+    vault: 0n, escrow: 0n, funded: 0n, fees: 0n, serverFees: 0n, repaid: 0n, lastDay: null, coinPrice: null, nextId: 1,
     wallets: new Map(), balances: new Map(), profiles: new Map(), owed: new Map(), toppedUp: new Map(), welcomed: new Map(),
     draws: new Map(), entered: new Map(), questGiven: new Map(), recent: [],
     orders: new Map(), ordersOf: new Map(), ticketOrders: new Map(), ticketOrdersOf: new Map(), ticketTrades: [], itemTrades: [],
@@ -281,6 +281,11 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
         }
       }
       set(c.draws, day, d);
+      // the vault pays the game's server back what holding the draw cost it in fees (contract: repay_the_draw)
+      if (fees && _who === SERVER) {
+        const fee = networkFee('settle_draw');
+        if (c.vault >= fee) { put(c, 'vault', c.vault - fee); set(c.wallets, SERVER, (c.wallets.get(SERVER) || 0n) + fee); put(c, 'repaid', c.repaid + fee); }
+      }
       return d.winners;
     },
     claim(who) { const amount = c.owed.get(who) || 0n; need(amount > 0n, 'Nothing to collect'); set(c.owed, who, undefined); set(c.wallets, who, (c.wallets.get(who) || 0n) + amount); return amount; },
@@ -399,7 +404,7 @@ export function newChain({ dayMs = 3_600_000, seed = 1, prizePercent = 20, coins
     money() {
       const sum = (it) => [...it].reduce((a, x) => a + x, 0n);
       return { cameIn: c.funded, wallets: sum(c.wallets.values()), owed: sum(c.owed.values()), offers: c.escrow, vault: c.vault,
-        setAside: sum([...c.draws.values()].filter((d) => !d.settled).map((d) => d.pool)), fees: c.fees, serverFees: c.serverFees };
+        setAside: sum([...c.draws.values()].filter((d) => !d.settled).map((d) => d.pool)), fees: c.fees, serverFees: c.serverFees, repaid: c.repaid };
     },
   };
 }

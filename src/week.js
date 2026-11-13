@@ -192,13 +192,16 @@ export function makeWeek({ seed = 1, dayMs = 3_600_000, vault = 4, players = 10,
   function money() {
     const m = chain.money(), playersIn = boats.reduce((a, b) => a + b.started, 0n), playersHave = boats.reduce((a, b) => a + chain.wallet(b.id), 0n);
     const makersFees = yocto(vault) + yocto(1) - chain.wallet('makers') - (vault > 0 ? yocto(vault) : 0n);      // what filling the vault cost the makers
-    const ours = makersFees + m.serverFees, players = m.fees - makersFees;
-    const cameIn = playersIn + yocto(vault) + ours, now = playersHave + m.owed + m.offers + m.vault + m.setAside + players + ours;
+    // the vault pays the server back for the draws it holds: that part of the server's fees is the game's own
+    // money, and only the rest (welcoming new players, filling the vault) comes out of the makers' pocket
+    const ours = makersFees + m.serverFees - m.repaid, players = m.fees - makersFees;
+    const cameIn = playersIn + yocto(vault) + ours, now = playersHave + m.owed + m.offers + m.vault + m.setAside + players + m.repaid + ours;
     return {
       cameIn: lines([['The players came with', playersIn], ['The makers put into the vault', yocto(vault)], ["The makers and the game's server paid as fees, from their own NEAR", ours]], cameIn),
       isNow: lines([["In the players' wallets", playersHave], ['Waiting to be collected (prizes, ticket sales)', m.owed], ['Held for offers on the ticket market', m.offers],
         ['In the prize vault', m.vault], ['Set aside as the prize of a day not drawn yet', m.setAside],
-        ["Paid to NEAR's network as fees by the players", players], ["Paid to NEAR's network as fees by the makers and the game's server", ours]], now),
+        ["Paid to NEAR's network as fees by the players", players], ["Paid to NEAR's network for holding the draws, by the vault", m.repaid],
+        ["Paid to NEAR's network as fees by the makers and the game's server", ours]], now),
       total: inNear(cameIn), totalNow: inNear(now),
     };
   }

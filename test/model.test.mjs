@@ -123,7 +123,9 @@ ok('all the NEAR of a week is accounted for, fees and all', () => {
   const m = week.money, add = (list) => Math.round(list.reduce((a, [, v]) => a + v, 0) * 1e6) / 1e6;
   assert.equal(m.total, m.totalNow); assert.equal(add(m.cameIn), m.total); assert.equal(add(m.isNow), m.totalNow);
   assert.ok(m.isNow.find(([k]) => /fees by the players/.test(k))[1] > 0.1, 'the players paid fees'); const ours = m.isNow.find(([k]) => /fees by the makers/.test(k))[1];
-  assert.ok(ours > 0.001 && ours < 0.02, 'the game\'s own accounts pay only for draws and welcomes, not for catches'); assert.equal(m.cameIn[2][1], m.isNow[6][1]);
+  assert.ok(ours > 0.001 && ours < 0.02, 'the game\'s own accounts pay only for welcoming players and filling the vault'); assert.equal(m.cameIn[2][1], m.isNow[7][1]);
+  const byVault = m.isNow.find(([k]) => /holding the draws, by the vault/.test(k))[1];
+  assert.equal(byVault, Math.round(7 * 4.6 * 100) / 1e6, 'the vault paid for the seven draws: 4.6 Tgas each');
 });
 ok('a week with other settings: more players, more joining every day, a bigger vault', () => {
   const big = playWeek({ days: 4, seed: 5, vault: 30, players: 23, joining: 4, wallet: 5 });

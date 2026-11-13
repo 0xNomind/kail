@@ -140,7 +140,7 @@ await check('The server signs as an account of its own: the account with the pri
   if (minter === CONTRACT) return { fail: `the contract's server is the contract's own account (${CONTRACT}): its fees come out of the account that holds the vault (npm run server-account)` };
   const j = await rpc('query', { request_type: 'view_account', finality: 'final', account_id: minter });
   if (j.result?.amount == null) return { fail: `the contract names ${minter} as its server, and there is no such account` };
-  return `the contract's server is ${minter}; it holds ${Number(BigInt(j.result.amount) / 10n ** 21n) / 1000} NEAR for the fees of holding draws`;
+  return `the contract's server is ${minter}; it holds ${Number(BigInt(j.result.amount) / 10n ** 21n) / 1000} NEAR, and the vault pays it back what each draw costs (contract/src/draw.rs, repay_the_draw)`;
 });
 
 // ---- a running game server, if one is named

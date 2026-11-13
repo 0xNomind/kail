@@ -14,6 +14,12 @@ use near_sdk::{AccountId, NearToken, Promise, env, near, require};
 
 use crate::{Contract, ContractExt, TICKET};
 
+/// For paying a draw's fee back from the vault (see `repay_the_draw`): the part of a draw's cost that the call
+/// itself cannot measure, and what the network asks for a unit of gas (its lowest price, which is what it has
+/// asked since the game began).
+const DRAW_OVERHEAD_GAS: u128 = 4_500_000_000_000;
+const GAS_PRICE: u128 = 100_000_000;
+
 /// At most this many tickets win in one draw.
 pub const MAX_WINNERS: u64 = 100;
 /// So many tickets go into one day's draw, first come first served, and one account can put in so many.
@@ -190,6 +196,7 @@ impl Contract {
         }
         self.draws.insert(day.0, d.clone());
         env::log_str(&format!("Draw of day {}: {} winning tickets, {} yoctoNEAR each", day.0, d.winners, d.prize_each));
+        self.repay_the_draw(&caller);
         d.winners
     }
 
@@ -338,6 +345,23 @@ impl Contract {
             }
         }
         vault * self.prize_percent as u128 / 100
+    }
+    /// The vault pays for its own draws. Holding one costs the game's server a fee to the network; the vault
+    /// gives it back, so that the server's account never runs dry and nobody has to feed it. What is paid: the
+    /// gas this call has used, and a fixed part for what cannot be measured from inside it (sending the call,
+    /// this payment, and the second call that tells the draw's transaction), at the network's gas price.
+    /// Not when the owner holds the draw, nor when the contract is its own server: then nothing left the game.
+    fn repay_the_draw(&mut self, caller: &AccountId) {
+        if *caller != self.minter || *caller == env::current_account_id() {
+            return;
+        }
+        let fee = (u128::from(env::used_gas().as_gas()) + DRAW_OVERHEAD_GAS) * GAS_PRICE;
+        if self.vault < fee {
+            return;
+        }
+        self.vault -= fee;
+        env::log_str(&format!("The vault pays {fee} yoctoNEAR for holding this draw"));
+        Promise::new(caller.clone()).transfer(NearToken::from_yoctonear(fee)).detach();
     }
     pub(crate) fn owe(&mut self, who: &AccountId, yocto: u128) {
         let now = self.owed.get(who).copied().unwrap_or(0);

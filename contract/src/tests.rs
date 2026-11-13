@@ -1138,6 +1138,53 @@ fn the_harbour_lists_only_the_draws_that_had_tickets_newest_first() {
     assert_eq!(c.state(Some(accounts(1))).past_draws.len(), 2);
 }
 
+/// The vault pays the game's server back for holding a draw: besides the prizes, the vault ends lower by
+/// exactly the payment the log names. When the owner holds a draw, nothing is paid.
+#[test]
+fn the_vault_pays_the_server_back_for_holding_a_draw() {
+    let mut c = fresh();
+    funded(&mut c, 1, 10, 0);
+    tickets(&mut c, 1, 10);
+    at(1, 0, NEXT_DAY, 9);
+    c.enter_draw(10);
+    at(0, 0, NEXT_DAY, 9);
+    c.configure(None, None, Some(accounts(3)), None, None);
+    // the next day begins (its prize is set aside) before the vault is looked at
+    at(0, 1, 2 * NEXT_DAY, 9);
+    c.add_prize();
+    let (before, prize) = (c.vault().0, c.draw(Some(U64(1))).pool.0);
+    at(3, 0, 2 * NEXT_DAY, 9);
+    assert_eq!(c.settle_draw(U64(1), None), 2);
+    let each = c.draw(Some(U64(1))).prize_each.0;
+    let paid = before + prize - 2 * each - c.vault().0;
+    // more than the fixed part alone (4.5 Tgas at the network's price), and nowhere near a prize
+    assert!(paid > 450_000_000_000_000_000_000 && paid < NEAR / 100, "{paid}");
+    let log = get_logs().into_iter().find(|l| l.starts_with("The vault pays")).expect("the payment is in the log");
+    assert!(log.contains(&paid.to_string()), "{log}");
+    // telling the draw's transaction afterwards costs the vault nothing more
+    let vault = c.vault().0;
+    c.settle_draw(U64(1), Some("GDHezAMM7qjBtzJcPL9Py1b2aTQrLiUaLHt6TmzmR6KM".to_string()));
+    assert_eq!(c.vault().0, vault);
+}
+/// The owner holding a draw is paid nothing back.
+#[test]
+fn the_owner_holding_a_draw_is_not_paid_back() {
+    let mut c = fresh();
+    funded(&mut c, 1, 10, 0);
+    tickets(&mut c, 1, 10);
+    at(1, 0, NEXT_DAY, 9);
+    c.enter_draw(10);
+    at(0, 0, NEXT_DAY, 9);
+    c.configure(None, None, Some(accounts(3)), None, None);
+    at(0, 1, 2 * NEXT_DAY, 9);
+    c.add_prize();
+    let (before, prize) = (c.vault().0, c.draw(Some(U64(1))).pool.0);
+    at(0, 0, 2 * NEXT_DAY, 9);
+    assert_eq!(c.settle_draw(U64(1), None), 2);
+    assert_eq!(c.vault().0, before + prize - 2 * c.draw(Some(U64(1))).prize_each.0);
+    assert!(get_logs().iter().all(|l| !l.starts_with("The vault pays")));
+}
+
 #[test]
 fn a_held_draw_can_carry_its_transaction_once_and_names_its_winners_in_the_log() {
     let mut c = fresh();
