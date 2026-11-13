@@ -213,6 +213,18 @@ boats' accounts (`npm run npcs`) are made by those scripts. `npm start` then run
 helper and the boats. The server's account pays for holding the draws, about 0.0005 NEAR each, and the vault
 pays it back with every draw (should the account still fall under half a NEAR, the server says so in its log and
 `npm run verify -- --server` fails).
+- **Where NEAR Auth works, and why not on the hosted address.** On testnet every app uses one sign-in client
+  that NEAR Auth shares (docs.auth.near.org/resources/testnet). A sign-in client has a list, kept by NEAR Auth,
+  of the addresses it may send a signed-in person back to. For the shared one that list is
+  `http://localhost:3000` (where NEAR Auth's own example app runs) and NEAR Auth's own demo,
+  `https://example.fast-auth.com`. Every other address is refused with "Callback URL mismatch", this game's
+  hosted one too; `npm run verify` asks NEAR Auth's sign-in server and prints its answers. So NEAR Auth signs
+  players in where the game runs at exactly `http://localhost:3000` on a machine that has the helper account's
+  key, and nowhere else until NEAR Auth adds the hosted address to its list. A reviewer's fresh copy has no
+  such key, and the hosted game shows the button as not available. What it did on the chain can be read: the
+  helper carried a player's approvals to NEAR Auth's contract `fast-auth.testnet`
+  ([B3Ryij…](https://testnet.nearblocks.io/txns/B3RyijTgpmZSH8H3vDsToNpNWkravahdjNoj5X3C7EAJ),
+  [7dVuZE…](https://testnet.nearblocks.io/txns/7dVuZEQQmnFRw4sDZHcpbTrs2aK1kHPVeKLvW41kCbBX)).
 `node scripts/rotate-server-key.mjs` replaces the server's key.
 
 The prize vault fills from players' top-ups. To add to it yourself: `npm run add-prize -- 10` puts 10 NEAR into

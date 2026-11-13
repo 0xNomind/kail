@@ -50,7 +50,7 @@ export function openSignIn() {
             <b>NEAR Auth</b><span>Sign in with Google, Apple or email.</span>
             <ul><li>An account is made for you, no wallet needed</li><li>Your NEAR is kept in the game: put it in or send it out at the Harbour</li><li>A top-up or a ticket buy costs ${near(SIGN_FEE)} NEAR on top, for the signing</li></ul>
           </button>
-          ${authOpen ? '' : `<p class="signoff"><b>Not available at this address yet.</b> NEAR Auth signs players in only on addresses it has approved, and this one is still waiting for that. Use a NEAR wallet for now.</p>`}
+          ${authOpen ? '' : `<p class="signoff"><b>Not available at this address.</b> On the test network NEAR Auth's shared sign-in sends people back only to a game running at http://localhost:3000, not to a hosted address. Use a NEAR wallet here.</p>`}
           <button type="button" class="signway" data-sign="wallet">
             <b>NEAR wallet</b><span>Sign in with Meteor or another NEAR wallet.</span>
             <ul><li>You play as the account you already have</li><li>Your NEAR stays in your wallet: top-ups and ticket buys are approved there</li></ul>

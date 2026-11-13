@@ -21,8 +21,11 @@ const NETWORKS = {
     explorer: 'https://testnet.nearblocks.io',
     // where NEAR is free (only on a test network)
     faucet: 'https://near-faucet.io/',
+    // where this game is hosted
+    hosted: 'https://kail.nomind.dev',
     // NEAR Auth (docs.auth.near.org/resources/testnet): its contracts, and the sign-in client shared by everybody
-    // who tries it out. That shared client only signs people in on a site at exactly `onlyAt`.
+    // who tries it out. That shared client sends a signed-in person back only to `onlyAt` (where NEAR Auth's own
+    // example app runs) and to NEAR Auth's own demo: a hosted game is refused (`npm run verify` asks and says).
     auth: { contract: 'fast-auth.testnet', mpc: 'v1.signer-prod.testnet', clientId: 'np8paqIpMWmNbzT4xAvOOapZBjsOpptl', onlyAt: 'http://localhost:3000' },
   },
   mainnet: {

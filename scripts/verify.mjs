@@ -73,6 +73,23 @@ await check('Every kind of token has a name and can be listed (NEP-245 metadata 
   if (orders.length < 100 && held < onSale) return { fail: `${onSale} tickets are up for sale but the contract's balance shows ${held}` };
   return `"${about.name}", ${about.spec}: ${all.map((t) => t.token_metadata.title).join(', ')}. The contract's own balance shows the ${onSale} tickets it holds for sellers`;
 });
+await check("Where NEAR Auth's shared testnet sign-in lets people in (why Google or email sign-in is closed on the hosted address)", async () => {
+  const { clientId, onlyAt } = NET.auth || {};
+  if (NETWORK !== 'testnet' || !clientId || !onlyAt) return { skip: 'only about the shared sign-in of the test network' };
+  // the first step of a sign-in, without signing in: NEAR Auth's server passes it on to its sign-in page (302)
+  // when the address to come back to is on the shared client's list, and refuses it (403) when it is not
+  const asked = async (back) => {
+    const q = new URLSearchParams({ client_id: clientId, response_type: 'code', scope: 'openid', redirect_uri: back, code_challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', code_challenge_method: 'S256', state: 'x' });
+    const r = await fetch(`https://login.testnet.fast-auth.com/authorize?${q}`, { redirect: 'manual', signal: AbortSignal.timeout(10_000) });
+    return { status: r.status, said: r.status === 403 && /callback url mismatch/i.test(await r.text()) ? ' "Callback URL mismatch"' : '' };
+  };
+  let local, hosted, demo;
+  try { [local, hosted, demo] = [await asked(onlyAt), await asked(NET.hosted), await asked('https://example.fast-auth.com')]; }
+  catch (e) { return { skip: `NEAR Auth's sign-in server did not answer (${String(e?.message || e).slice(0, 80)})` }; }
+  const line = `login.testnet.fast-auth.com, shared client: ${onlyAt} ${local.status}${local.said}; NEAR Auth's own demo https://example.fast-auth.com ${demo.status}${demo.said}; ${NET.hosted} ${hosted.status}${hosted.said}`;
+  if (local.status !== 302) return { fail: `${line}. It should pass ${onlyAt} on to its sign-in page` };
+  return hosted.status === 302 ? `${line}. The hosted address is on the list now: NEAR Auth can be opened there (onlyAt in src/network.js)` : `${line}. So NEAR Auth signs players in at ${onlyAt} only, and the hosted game offers the wallet`;
+});
 await check('One read gives the quest, the draw, both markets, the vault and the coin price', async () => {
   S = await view('state', { account_id: null });
   const q = S.quest.needs.map(([id, n]) => `${n} ${id}`).join(', ');
