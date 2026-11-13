@@ -21,7 +21,7 @@ run_worker_first = ["/api/*"]
 [vars]
 NEAR_NETWORK = "testnet"
 NEAR_CONTRACT = "kail-game.testnet"
-NEAR_ACCOUNT = "kail-game.testnet"
+NEAR_ACCOUNT = "kail-server.testnet"
 WELCOME = "kail-welcome.testnet"
 # The computer's boats: which accounts they are (their keys stay where the boats run, see README.md)
 NPCS = "kail-old-tom.testnet=Old Tom,kail-maggie.testnet=Maggie,kail-finn.testnet=Finn,kail-captain-hale.testnet=Captain Hale,kail-nora.testnet=Nora,kail-ruby.testnet=Ruby,kail-silas.testnet=Silas,kail-wren.testnet=Wren,kail-jack.testnet=Jack,kail-dolly.testnet=Dolly"

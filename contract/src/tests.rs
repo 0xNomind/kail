@@ -189,6 +189,30 @@ fn a_cast_spends_a_bait_and_the_server_lands_the_fish() {
     assert_eq!(c.player(accounts(1)).bait, U128(1));
 }
 
+/// The server can be an account of its own (so that its fees are not paid by the account with the vault):
+/// once the owner names it, it alone lands catches, and the contract's own account no longer can.
+#[test]
+fn the_server_can_be_an_account_of_its_own() {
+    let mut c = fresh();
+    funded(&mut c, 1, 1, 2);
+    as_player(0, 0);
+    c.configure(None, None, Some(accounts(3)), None, None);
+    assert_eq!((c.owner(), c.minter()), (accounts(0), accounts(3)));
+    // the new server lands a catch
+    as_player(1, 0);
+    let cast = c.cast(seal());
+    as_player(3, 0);
+    assert_eq!(c.land(accounts(1), cast, "anchovy".to_string(), secret(), None), Some("anchovy".to_string()));
+    assert_eq!(has(&c, 1, "anchovy"), 1);
+    // the contract's own account, which was the server before, is refused
+    as_player(1, 0);
+    let cast = c.cast(seal());
+    as_player(0, 0);
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.land(accounts(1), cast, "anchovy".to_string(), secret(), None))).is_err();
+    assert!(refused);
+    assert_eq!(has(&c, 1, "anchovy"), 1);
+}
+
 #[test]
 #[should_panic(expected = "Only the game's server can land a catch")]
 fn a_player_cannot_land_their_own_catch() {

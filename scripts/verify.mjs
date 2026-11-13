@@ -122,6 +122,14 @@ await check('The boats trade on the same markets as players', async () => {
   return `${items.length} of ${S.orders.length} fish orders and ${tickets.length} of ${S.ticket_orders.length} ticket orders are theirs; ${sales} of the last ${(S.ticket_trades || []).length} ticket sales involved a boat. ${one}`;
 });
 
+await check('The server signs as an account of its own: the account with the prize vault pays no fees', async () => {
+  const minter = await view('minter');
+  if (minter === CONTRACT) return { fail: `the contract's server is the contract's own account (${CONTRACT}): its fees come out of the account that holds the vault (npm run server-account)` };
+  const j = await rpc('query', { request_type: 'view_account', finality: 'final', account_id: minter });
+  if (j.result?.amount == null) return { fail: `the contract names ${minter} as its server, and there is no such account` };
+  return `only ${minter} may land a catch; it holds ${Number(BigInt(j.result.amount) / 10n ** 21n) / 1000} NEAR for fees`;
+});
+
 // ---- a running game server, if one is named
 const ask = async (address, init) => { const r = await fetch(server + address, { signal: AbortSignal.timeout(20_000), ...init }); return { status: r.status, body: await r.json().catch(() => null) }; };
 const post = (address, body) => ask(address, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -130,7 +138,11 @@ await check('The game server is up and plays on this contract', async () => {
   if (!server) return noServer;
   const a = await ask('/api/status');
   if (a.status === 503) return { skip: `${server} runs without a server key (the pages work, catches cannot be landed there)` };
-  return a.status === 200 && a.body?.contract === CONTRACT ? `${server}/api/status: ${JSON.stringify(a.body)}` : { fail: `${a.status} ${JSON.stringify(a.body).slice(0, 120)}` };
+  if (a.status !== 200 || a.body?.contract !== CONTRACT) return { fail: `${a.status} ${JSON.stringify(a.body).slice(0, 120)}` };
+  const minter = await view('minter');
+  if (a.body.account !== minter) return { fail: `that server signs as ${a.body.account}, but the contract lets only ${minter} land a catch` };
+  if (a.body.near != null && a.body.near < 0.5) return { fail: `the server's account ${a.body.account} is down to ${a.body.near} NEAR: catches will stop being landed` };
+  return `${server}/api/status: ${JSON.stringify(a.body)}`;
 });
 await check('The server decides the sea: it hands out a seed with a ticket it signed', async () => {
   if (!server) return noServer;

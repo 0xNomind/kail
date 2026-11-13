@@ -34,6 +34,16 @@ function connect(env) {
   return chain;
 }
 const view = (c, method, args = {}) => c.provider.callFunction({ contractId: c.contract, method, args });
+// NEAR the server's own account holds: every catch landed and every draw held costs it a fee, so it has to be
+// topped up now and then. Looked up at most once in five minutes; null when the chain did not say.
+let purseSeen = { at: 0, near: null, of: '' };
+export async function purse(env) {
+  if (purseSeen.of === env.NEAR_ACCOUNT && Date.now() - purseSeen.at < 300_000) return purseSeen.near;
+  let near = null;
+  try { near = Number(BigInt((await connect(env).provider.viewAccount({ accountId: env.NEAR_ACCOUNT })).amount) / 10n ** 21n) / 1000; } catch { /* asked again next time */ }
+  purseSeen = { at: Date.now(), near, of: env.NEAR_ACCOUNT };
+  return near;
+}
 // the hash of the transaction the last call ran in
 let lastHash = null;
 // One key signs one transaction at a time (each needs the next number in a row), so calls wait their turn.
@@ -206,7 +216,7 @@ export default {
       if (url.pathname === '/api/land' && request.method === 'POST') return await land(request, env);
       if (url.pathname === '/api/sea' && request.method === 'POST') return await newSea(request, env);
       if (url.pathname === '/api/sea/keep' && request.method === 'POST') return await keepSea(request, env);
-      if (url.pathname === '/api/status') return json({ network: env.NEAR_NETWORK || 'testnet', contract: env.NEAR_CONTRACT, account: env.NEAR_ACCOUNT });
+      if (url.pathname === '/api/status') return json({ network: env.NEAR_NETWORK || 'testnet', contract: env.NEAR_CONTRACT, account: env.NEAR_ACCOUNT, near: await purse(env) });
       return json({ error: 'Not found' }, 404);
     } catch (e) {
       return json({ error: reason(e) }, 502);

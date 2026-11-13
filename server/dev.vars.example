@@ -5,9 +5,11 @@
 NEAR_NETWORK=testnet
 NEAR_CONTRACT=kail-game.testnet
 
-# The account and key the server signs with: it lands catches and holds the draws.
-# Give it a key that may only call `land` and `settle_draw` on the contract, never a full-access key.
-NEAR_ACCOUNT=kail-game.testnet
+# The account and key the server signs with: it lands catches and holds the draws, and pays the network's fee
+# for each. An account of its own, not the contract's: the contract's account holds the prize vault.
+# `npm run server-account` makes it, names it to the contract and writes these two lines. The key may only call
+# `land` and `settle_draw` on the contract; never a full-access key.
+NEAR_ACCOUNT=kail-server.testnet
 NEAR_KEY=ed25519:...
 
 # Signs the tickets the server hands out for a sea: any long random text. (Without it NEAR_KEY is used.)

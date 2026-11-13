@@ -49,7 +49,7 @@ Where each claim lives, and how to check it:
 | --- | --- | --- |
 | A catch is played again by the server before it counts | `src/replay.js`, `land` in `server/game.mjs` | `npm test` (thousands of recorded catches replay to the same result; tampered ones do not); `verify --server`: a made-up catch is refused |
 | Everything owned is an NEP-245 token of one contract | `contract/src/mt.rs` | `npm run verify`; `npm run test:contract` |
-| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (58 tests) |
+| The prize, the 500 / 10 limits, one ticket in five, the coin price | `contract/src/draw.rs`, `price_for` in `contract/src/lib.rs` | `npm run verify`; `npm run test:contract` (59 tests) |
 | The economy keeps going by itself, and its books close | `src/week.js`, `src/model.js` | `npm run simulate`; `npm test` |
 | The computer's boats are accounts that play by readable rules | `src/npc-rules.js`, `server/npc.mjs` | `npm run verify` lists them; `test/npc.test.mjs` |
 | Playing opens no wallet after one approval | `GAME_CALLS` and `enableGameKey` in `src/account.js` | a player's account has a function-call key limited to those methods (any explorer) |
@@ -115,7 +115,10 @@ On testnet a "day" is one hour, so a quest and a draw come round every hour. The
 ## What is on NEAR
 
 - Contract: [`kail-game.testnet`](https://testnet.nearblocks.io/address/kail-game.testnet), source in
-  [`contract/`](contract/README.md) (Rust, near-sdk). 58 unit tests and a test on a local chain.
+  [`contract/`](contract/README.md) (Rust, near-sdk). 59 unit tests and a test on a local chain.
+- The game's server signs as an account of its own, `kail-server.testnet`, with a key that may only call `land`
+  and `settle_draw` on the contract. It pays the network's fee for every catch it lands; the contract's account,
+  which holds the prize vault, pays none. The same arrangement is what mainnet would use.
 - Tokens: one NEP-245 contract holds every kind. Only tickets can be sent to another account; coins, bait and
   fish change hands through the market.
 - The draw uses the chain's randomness. Once a day is over it is held by a call from the game's server (every
@@ -185,9 +188,12 @@ npm run build:contract   # builds the contract (needs cargo-near)
 ## Running the server yourself
 
 The server's settings are listed in [`server/dev.vars.example`](server/dev.vars.example): copy it to
-`server/.dev.vars`. It needs an account with a key that may call `land` and `settle_draw` on the contract; the
-helper account (`npm run welcome`) and the boats' accounts (`npm run npcs`) are made on testnet by those scripts.
-`npm start` then runs the pages, the server, the helper and the boats.
+`server/.dev.vars`. The server's own account (`npm run server-account`: makes it, gives it a key that may only
+call `land` and `settle_draw`, and names it to the contract), the helper account (`npm run welcome`) and the
+boats' accounts (`npm run npcs`) are made by those scripts. `npm start` then runs the pages, the server, the
+helper and the boats. The server's account pays about 0.0003 NEAR for every catch landed: top it up now and then
+(the server says so in its log when it is under half a NEAR, and `npm run verify -- --server` fails then).
+`node scripts/rotate-server-key.mjs` replaces the server's key.
 
 ## Hosting
 

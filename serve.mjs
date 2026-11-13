@@ -73,6 +73,9 @@ if (env.NEAR_KEY) {
   setInterval(async () => {
     try { const held = await (await loadGame()).holdDraws(env); if (held.length) console.log('draws held:', JSON.stringify(held)); }
     catch (e) { console.log('could not hold the draw:', String(e?.message || e).slice(0, 160)); }
+    // every catch landed costs the server's account a fee: said here before it runs dry and catches stop landing
+    try { const near = await (await loadGame()).purse(env); if (near != null && near < 0.5) console.log(`LOW: the server's account ${env.NEAR_ACCOUNT} holds ${near} NEAR. Top it up, or catches will stop being landed.`); }
+    catch { /* asked again in a minute */ }
   }, 60_000);
 }
 // One address: http://localhost:3000. NEAR Auth's sign-in client for testnet (shared by everybody trying it out)
