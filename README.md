@@ -201,6 +201,12 @@ pays it back with every draw (should the account still fall under half a NEAR, t
 `npm run verify -- --server` fails).
 `node scripts/rotate-server-key.mjs` replaces the server's key.
 
+The prize vault fills from players' top-ups. To add to it yourself: `npm run add-prize -- 10` puts 10 NEAR into
+it from the welcome account (`--from <account>` for another one whose key is on this machine). On testnet,
+`npm run add-prize -- --faucet` asks the faucet service for a new account with 10 test NEAR, puts that into the
+vault and closes the account again (one for each run; the service turns away many requests in a row). NEAR sent to the
+contract's account by an ordinary transfer is not in the vault; only `add_prize` and top-ups count.
+
 ## Hosting
 
 ### On one machine that stays on (the simple way)

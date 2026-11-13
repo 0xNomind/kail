@@ -20,6 +20,7 @@
     "art": "node art/build.mjs && node art/icon.mjs",
     "npcs": "node scripts/npc-accounts.mjs",
     "server-account": "node scripts/server-account.mjs",
+    "add-prize": "node scripts/add-prize.mjs",
     "welcome": "node scripts/welcome-account.mjs"
   },
   "dependencies": {
